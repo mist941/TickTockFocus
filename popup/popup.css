@@ -1,0 +1,23 @@
+body {
+  font-family: Arial, sans-serif;
+  width: 380px;
+  height: 500px;
+  text-align: center;
+}
+
+.container {
+  height: 100%;
+  width: 100%;
+}
+
+input {
+  width: 100px;
+  padding: 5px;
+  margin: 10px 0;
+}
+
+button {
+  margin: 5px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
