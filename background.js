@@ -8,6 +8,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
         chrome.storage.local.remove("endTime");
         chrome.notifications.create({
           type: "basic",
+          iconUrl: "icons/chronometer.png",
           title: "Timer finished",
           message: "Time expired!",
         });

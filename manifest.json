@@ -5,18 +5,18 @@
   "description": "This extension demonstrates a 'browser action' with a popup that changes the page color.",
   "action": {
     "default_popup": "popup/popup.html",
-    "default_icon": "icons/icon.svg"
+    "default_icon": "icons/chronometer.png"
   },
   "icons": {
-    "16": "icons/icon.svg",
-    "32": "icons/icon.svg",
-    "48": "icons/icon.svg",
-    "128": "icons/icon.svg"
+    "16": "icons/chronometer.png",
+    "32": "icons/chronometer.png",
+    "48": "icons/chronometer.png",
+    "128": "icons/chronometer.png"
   },
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["storage", "alarms"],
+  "permissions": ["storage", "alarms", "notifications"],
   "host_permissions": ["<all_urls>"],
   "content_scripts": [
     {
