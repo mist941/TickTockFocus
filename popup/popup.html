@@ -7,13 +7,24 @@
     <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-    <div class="container">
-      <h1>Timer</h1>
-      <input type="number" id="minutes" placeholder="Minutes" min="1">
-      <button id="start">Start</button>
-      <button id="stop">stop</button>
-      <p id="countdown">00:00</p>
-    </div>
+    <main class="container">
+      <header class="header panel">
+        <nav class="tab-container">
+          <div class="tab">Timer</div>
+          <div class="tab">Presets</div>
+          <div class="tab">Settings</div>
+        </nav>
+        <div class="clock" id="clock">
+          00:00
+        </div>
+      </header>
+      <div class="content panel">
+        <input type="number" id="minutes" placeholder="Minutes" min="1">
+        <button id="start">Start</button>
+        <button id="stop">stop</button>
+        <p id="countdown">00:00</p>
+      </div>
+    </main>
     <script src="popup.js"></script>
 </body>
 </html>

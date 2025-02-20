@@ -3,6 +3,35 @@ document.addEventListener("DOMContentLoaded", () => {
   const startButton = document.getElementById("start");
   const stopButton = document.getElementById("stop");
   const countdownDisplay = document.getElementById("countdown");
+  const clock = document.getElementById("clock");
+
+  function getSettings() {
+    try {
+      const settings = localStorage.getItem("settings");
+      return settings ? JSON.parse(settings) : {};
+    } catch (error) {
+      console.error(error);
+      return {};
+    }
+  }
+
+  function setSettings(key, value) {
+    const settings = getSettings();
+    settings[key] = value;
+    localStorage.setItem("settings", JSON.stringify(settings));
+  }
+
+  function updateClock() {
+    const now = new Date();
+    let hours = now.getHours();
+    const minutes = now.getMinutes().toString().padStart(2, "0");
+
+    const amPm = hours >= 12 ? "PM" : "AM";
+
+    hours = hours % 12 || 12;
+
+    clock.textContent = `${hours}:${minutes} ${amPm}`;
+  }
 
   function updateCountdown() {
     chrome.storage.local.get(["endTime"], (result) => {
@@ -39,5 +68,16 @@ document.addEventListener("DOMContentLoaded", () => {
     countdownDisplay.textContent = "00:00";
   });
 
+  clock.addEventListener("click", () => {
+    const timeFormat = getSettings().timeFormat;
+    if (timeFormat === "12h") {
+      setSettings("timeFormat", "24h");
+    } else {
+      setSettings("timeFormat", "12h");
+    }
+  });
+
+  setInterval(updateClock, 1000);
   updateCountdown();
+  updateClock();
 });

@@ -1,13 +1,59 @@
 body {
   font-family: Arial, sans-serif;
-  width: 380px;
+  width: 370px;
   height: 500px;
   text-align: center;
+  background: rgb(24 24 27);
+  border-radius: 15px;
+  color: rgb(161 161 170);
+  margin: 7px;
+  font-size: 16px;
 }
 
 .container {
   height: 100%;
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.panel {
+  background-color: rgb(39 39 42);
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+}
+
+.tab-container {
+  display: flex;
+  gap: 10px;
+}
+
+.tab {
+  font-size: 16px;
+  padding: 4px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: 300ms all ease;
+  &:hover {
+    background-color: rgb(52 52 56);
+    transition: 300ms all ease;
+  }
+}
+
+.clock {
+  color: #fff;
+}
+
+.content {
+  height: 100%;
 }
 
 input {
