@@ -10,6 +10,16 @@ body {
   font-size: 16px;
 }
 
+p {
+  margin: 0;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .container {
   height: 100%;
   width: 100%;
@@ -44,26 +54,77 @@ body {
   transition: 300ms all ease;
   &:hover {
     background-color: rgb(52 52 56);
-    transition: 300ms all ease;
   }
+}
+
+.tab.active {
+  background-color: #6e6e6e;
+  color: #fff;
 }
 
 .clock {
   color: #fff;
+  cursor: pointer;
 }
 
 .content {
   height: 100%;
 }
 
-input {
-  width: 100px;
-  padding: 5px;
-  margin: 10px 0;
+.tab-content {
+  display: none;
 }
 
-button {
-  margin: 5px;
-  padding: 5px 10px;
+.button {
+  border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 16px;
   cursor: pointer;
+  transition: 300ms all ease;
+  background-color: rgb(52 52 56);
+  color: rgb(161 161 170);
+  width: 100%;
+  &:hover {
+    background-color: rgb(63 63 68);
+    transition: 300ms all ease;
+  }
+  &:active {
+    background-color: rgb(74 74 80);
+  }
+}
+
+.preset-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.preset-explanation {
+  font-size: 14px;
+}
+.preset-input-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.input {
+  background-color: rgb(52 52 56);
+  color: rgb(161 161 170);
+  border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 16px;
+  outline: unset;
+}
+
+.name-input {
+  width: 150px;
+}
+
+.clock-input {
+  width: 30px;
 }

@@ -4,6 +4,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const stopButton = document.getElementById("stop");
   const countdownDisplay = document.getElementById("countdown");
   const clock = document.getElementById("clock");
+  const tabs = document.querySelectorAll(".tab");
+  const tabContents = document.querySelectorAll(".tab-content");
 
   function getSettings() {
     try {
@@ -14,6 +16,36 @@ document.addEventListener("DOMContentLoaded", () => {
       return {};
     }
   }
+
+  function switchTab(tabName) {
+    // Hide all content divs
+    tabContents.forEach((content) => {
+      content.style.display = "none";
+    });
+
+    // Remove active class from all tabs
+    tabs.forEach((tab) => {
+      tab.classList.remove("active");
+    });
+
+    // Show selected content and activate corresponding tab
+    const selectedTab = document.querySelector(`.tab[data-tab="${tabName}"]`);
+    const selectedContent = document.querySelector(
+      `.tab-content[data-tab="${tabName}"]`
+    );
+
+    if (selectedTab && selectedContent) {
+      selectedContent.style.display = "block";
+      selectedTab.classList.add("active");
+    }
+  }
+
+  // Add click event listeners to tabs
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      switchTab(tab.dataset.tab);
+    });
+  });
 
   function setSettings(key, value) {
     const settings = getSettings();
@@ -26,9 +58,12 @@ document.addEventListener("DOMContentLoaded", () => {
     let hours = now.getHours();
     const minutes = now.getMinutes().toString().padStart(2, "0");
 
-    const amPm = hours >= 12 ? "PM" : "AM";
+    let amPm = "";
 
-    hours = hours % 12 || 12;
+    if (getSettings().timeFormat === "12h") {
+      hours = hours % 12 || 12;
+      amPm = hours >= 12 ? "AM" : "PM";
+    }
 
     clock.textContent = `${hours}:${minutes} ${amPm}`;
   }
@@ -75,9 +110,11 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       setSettings("timeFormat", "12h");
     }
+    updateClock();
   });
 
   setInterval(updateClock, 1000);
+  switchTab("timer");
   updateCountdown();
   updateClock();
 });
