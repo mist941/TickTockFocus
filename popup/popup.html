@@ -28,14 +28,28 @@
           <header class="preset-header">
             <button class="button" id="create_preset">Create preset</button>
           </header>
-          <form id="preset_form">
-            <div class="preset-input-container">
-              <input type="text" class="input name-input" id="preset_name" placeholder="Preset name">
-              <input type="number" class="input clock-input" id="preset_hour" placeholder="00" min="0" max="60">:
-              <input type="number" class="input clock-input" id="preset_minutes" placeholder="00" min="0" max="60">:
-              <input type="number" class="input clock-input" id="preset_seconds" placeholder="00" min="1" max="60">
+          <form id="preset_form" class="preset-form">
+            <div class="preset-container">
+              <input type="text" class="input" id="preset_name" placeholder="Preset name">
+              <div class="clock-settings">
+                <div class="clock-input-container">
+                  <data class="clock-input-wrapper">
+                    <input type="number" class="input clock-input" id="preset_hour" placeholder="00" min="0" max="60">
+                    <p class="clock-input-label">H</p>
+                  </data>:
+                  <data class="clock-input-wrapper">
+                    <input type="number" class="input clock-input" id="preset_minutes" placeholder="00" min="0" max="60">
+                    <p class="clock-input-label">M</p>
+                  </data>:
+                  <div class="clock-input-wrapper">
+                    <input type="number" class="input clock-input" id="preset_seconds" placeholder="00" min="1" max="60">
+                    <p class="clock-input-label">S</p>
+                  </div>
+                </div>
+                <button class="button" type="button">Add</button>
+              </div>
             </div>
-            <button type="submit">Create</button>
+            <button class="button" type="submit">Create</button>
           </form>
         </div>
       </div>

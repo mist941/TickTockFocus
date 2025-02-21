@@ -101,14 +101,21 @@ input[type="number"]::-webkit-inner-spin-button {
   margin-bottom: 10px;
 }
 
+.preset-form {
+  padding: 7px;
+  border: 1px solid rgb(52 52 56);
+  border-radius: 4px;
+}
+
 .preset-explanation {
   font-size: 14px;
 }
-.preset-input-container {
+.preset-container {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   justify-content: space-between;
   width: 100%;
+  gap: 10px;
 }
 
 .input {
@@ -121,10 +128,32 @@ input[type="number"]::-webkit-inner-spin-button {
   outline: unset;
 }
 
-.name-input {
-  width: 150px;
+.clock-settings {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  width: 100%;
+}
+
+.clock-input-container {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+}
+
+.clock-input-wrapper {
+  position: relative;
 }
 
 .clock-input {
-  width: 30px;
+  width: 40px;
+}
+
+.clock-input-label {
+  position: absolute;
+  right: 5px;
+  transform: translateY(-50%);
+  top: 50%;
 }
