@@ -252,19 +252,8 @@ const PresetFormManager = {
 
   async savePreset() {
     try {
-      const preset = {
-        name: ELEMENTS.preset.inputs.name.value,
-        hours: ELEMENTS.preset.inputs.hours.value,
-        minutes: ELEMENTS.preset.inputs.minutes.value,
-        seconds: ELEMENTS.preset.inputs.seconds.value,
-      };
-
-      if (!this.validatePreset(preset)) {
-        throw new Error("Invalid preset data");
-      }
-
-      await Storage.savePreset(preset);
-      this.hideForm();
+      // await Storage.savePreset(preset);
+      // this.hideForm();
     } catch (error) {
       console.error("Error saving preset:", error);
     }
