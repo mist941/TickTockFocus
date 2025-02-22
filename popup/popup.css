@@ -173,3 +173,48 @@ input[type="number"]::-webkit-inner-spin-button {
   display: flex;
   gap: 10px;
 }
+
+.clock-presets-list {
+  margin: 10px 0;
+  min-height: 50px;
+  border: 1px dashed rgb(52 52 56);
+  border-radius: 4px;
+  padding: 5px;
+}
+
+.preset-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px;
+  margin: 5px 0;
+  background-color: rgb(52 52 56);
+  border-radius: 4px;
+  cursor: move;
+}
+
+.preset-item.dragging {
+  opacity: 0.5;
+  background-color: rgb(63 63 68);
+}
+
+.preset-clock-item {
+  background-color: rgb(39 39 42);
+  padding: 2px 8px;
+  border-radius: 4px;
+  min-width: 30px;
+}
+
+.preset-remove-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: rgb(161 161 170);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0 5px;
+
+  &:hover {
+    color: #ff4444;
+  }
+}
