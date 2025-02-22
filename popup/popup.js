@@ -233,6 +233,12 @@ const PresetFormManager = {
     });
   },
 
+  clearClocks() {
+    ELEMENTS.preset.inputs.hours.value = "";
+    ELEMENTS.preset.inputs.minutes.value = "";
+    ELEMENTS.preset.inputs.seconds.value = "";
+  },
+
   showForm() {
     ELEMENTS.preset.form.style.display = "block";
     ELEMENTS.preset.createButton.style.display = "none";
@@ -290,8 +296,8 @@ const PresetFormManager = {
     const presetItem = Utils.createElementWithClass("div", "preset-item");
     presetItem.draggable = true;
     presetItem.innerHTML = `
-      <div class="preset-clock-item">${Utils.padNumber(hours)}</div>
-      <div class="preset-clock-item">${Utils.padNumber(minutes)}</div>
+      <div class="preset-clock-item">${Utils.padNumber(hours)}</div>:
+      <div class="preset-clock-item">${Utils.padNumber(minutes)}</div>:
       <div class="preset-clock-item">${Utils.padNumber(seconds)}</div>
       <button class="preset-remove-btn">×</button>
     `;
@@ -306,7 +312,7 @@ const PresetFormManager = {
     const presetItem = this.createPresetItem(hours, minutes, seconds);
     ELEMENTS.preset.list.appendChild(presetItem);
 
-    this.clearForm();
+    this.clearClocks();
     this.initializeDragAndDrop(presetItem);
   },
 
