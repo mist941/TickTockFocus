@@ -11,7 +11,7 @@ const ELEMENTS = {
     createButton: document.getElementById("create_preset"),
     form: document.getElementById("preset_form"),
     cancelButton: document.getElementById("cancel_preset"),
-    addButton: document.getElementById("add_presest"),
+    addButton: document.getElementById("add_preset"),
     inputs: {
       name: document.getElementById("preset_name"),
       hours: document.getElementById("preset_hours"),
