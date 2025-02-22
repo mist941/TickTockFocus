@@ -127,7 +127,7 @@ const TabManager = {
       );
 
       if (!selectedTab || !selectedContent) {
-        throw new Error(`Tab ${tabName} not found`);
+        return;
       }
 
       selectedContent.style.display = "block";
@@ -227,10 +227,15 @@ const TimerManager = {
 
 // Preset Form Management with improved validation and error handling
 const PresetFormManager = {
+  clearClocksList() {
+    ELEMENTS.preset.list.innerHTML = "";
+  },
+
   clearForm() {
     Object.values(ELEMENTS.preset.inputs).forEach((input) => {
       if (input) input.value = "";
     });
+    this.clearClocksList();
   },
 
   clearClocks() {
@@ -252,8 +257,36 @@ const PresetFormManager = {
 
   async savePreset() {
     try {
-      // await Storage.savePreset(preset);
-      // this.hideForm();
+      const presetName = ELEMENTS.preset.inputs.name.value.trim();
+      if (!presetName) {
+        return;
+      }
+
+      const clockItems = Array.from(
+        ELEMENTS.preset.list.querySelectorAll(".preset-item")
+      );
+      if (clockItems.length === 0) {
+        return;
+      }
+
+      const clocks = clockItems.map((item, index) => {
+        const timeItems = item.querySelectorAll(".preset-clock-item");
+        return {
+          position: index,
+          hours: parseInt(timeItems[0].textContent) || 0,
+          minutes: parseInt(timeItems[1].textContent) || 0,
+          seconds: parseInt(timeItems[2].textContent) || 0,
+        };
+      });
+
+      const preset = {
+        name: presetName,
+        clocks: clocks,
+      };
+
+      await Storage.savePreset(preset);
+      this.clearClocksList();
+      this.hideForm();
     } catch (error) {
       console.error("Error saving preset:", error);
     }
