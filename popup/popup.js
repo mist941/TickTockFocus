@@ -187,6 +187,17 @@ const ClockManager = {
 
 // Timer Management with state handling
 const TimerManager = {
+  totalTime: 0,
+  remainingTime: 0,
+  timerInterval: null,
+
+  updateCircleProgress(percentage) {
+    const circle = document.querySelector(".timer-progress-bar");
+    const circumference = 2 * Math.PI * 90; // 2πr
+    const offset = circumference - (percentage / 100) * circumference;
+    circle.style.strokeDashoffset = offset;
+  },
+
   updateCountdown() {
     chrome.storage.local.get([CONFIG.STORAGE_KEYS.END_TIME], (result) => {
       if (!result.endTime) return;
@@ -198,6 +209,11 @@ const TimerManager = {
         ELEMENTS.timer.countdownDisplay.textContent = `${Utils.padNumber(
           minutes
         )}:${Utils.padNumber(seconds)}`;
+
+        // Calculate and update progress
+        const percentage = (remaining / this.totalTime) * 100;
+        this.updateCircleProgress(percentage);
+
         setTimeout(() => this.updateCountdown(), CONFIG.UPDATE_INTERVAL);
       } else {
         this.resetTimer();
@@ -209,14 +225,21 @@ const TimerManager = {
     const minutes = parseInt(ELEMENTS.timer.minutesInput.value);
     if (!Utils.validateTimeInput(minutes)) return;
 
-    const endTime = Date.now() + minutes * 60000;
+    this.totalTime = minutes * 60000; // Convert to milliseconds
+    const endTime = Date.now() + this.totalTime;
+
     chrome.storage.local.set({ [CONFIG.STORAGE_KEYS.END_TIME]: endTime });
     chrome.alarms.create("countdown", { periodInMinutes: 1 });
+
+    // Reset circle progress
+    this.updateCircleProgress(100);
     this.updateCountdown();
   },
 
   resetTimer() {
     ELEMENTS.timer.countdownDisplay.textContent = "00:00";
+    this.updateCircleProgress(0);
+    this.totalTime = 0;
   },
 
   stopTimer() {

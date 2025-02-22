@@ -19,10 +19,20 @@
       </header>
       <div class="content panel">
         <div class="tab-content" data-tab="timer">
-          <input type="number" id="minutes" placeholder="Minutes" min="1">
-          <button id="start">Start</button>
-          <button id="stop">stop</button>
-          <p id="countdown">00:00</p>
+          <div class="timer-circle">
+            <svg class="timer-progress" width="200" height="200">
+              <circle class="timer-progress-bg" cx="100" cy="100" r="90"/>
+              <circle class="timer-progress-bar" cx="100" cy="100" r="90"/>
+            </svg>
+            <div class="timer-display">
+              <p id="countdown">00:00</p>
+            </div>
+          </div>
+          <div class="timer-controls">
+            <input type="number" id="minutes" placeholder="Minutes" min="1">
+            <button id="start">Start</button>
+            <button id="stop">Stop</button>
+          </div>
         </div>
         <div class="tab-content" data-tab="presets">
           <header class="preset-header">
