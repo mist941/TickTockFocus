@@ -182,6 +182,38 @@ const PresetFormManager = {
     Storage.savePreset(preset);
     this.hideForm();
   },
+
+  limitInputLength(input) {
+    // Remove any decimal points and non-numeric characters
+    input.value = input.value.replace(/[^\d]/g, "");
+
+    if (input.value.length > 2) {
+      input.value = input.value.slice(0, 2);
+    }
+    // Ensure the value doesn't exceed 99
+    if (parseInt(input.value) > 99) {
+      input.value = "99";
+    }
+  },
+
+  initializeInputLimits() {
+    const clockInputs = [
+      ELEMENTS.preset.inputs.hours,
+      ELEMENTS.preset.inputs.minutes,
+      ELEMENTS.preset.inputs.seconds,
+    ];
+
+    clockInputs.forEach((input) => {
+      // Prevent decimal point input
+      input.addEventListener("keypress", (e) => {
+        if (e.key === "." || e.key === ",") {
+          e.preventDefault();
+        }
+      });
+
+      input.addEventListener("input", () => this.limitInputLength(input));
+    });
+  },
 };
 
 // Initialize Application
@@ -216,4 +248,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ELEMENTS.preset.addButton.addEventListener("click", () =>
     PresetFormManager.savePreset()
   );
+
+  // Initialize input limitations
+  PresetFormManager.initializeInputLimits();
 });
