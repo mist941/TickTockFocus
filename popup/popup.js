@@ -109,7 +109,7 @@ const Storage = {
   },
 };
 
-// Tab Management with improved error handling
+// Tab Management with error handling
 const TabManager = {
   switchTab(tabName) {
     try {
@@ -145,7 +145,7 @@ const TabManager = {
   },
 };
 
-// Clock Management with better time handling
+// Clock Management with time handling
 const ClockManager = {
   formatTime(hours, minutes, format) {
     const formattedHours = format === "12h" ? hours % 12 || 12 : hours;
@@ -184,7 +184,7 @@ const ClockManager = {
   },
 };
 
-// Timer Management with improved state handling
+// Timer Management with state handling
 const TimerManager = {
   updateCountdown() {
     chrome.storage.local.get([CONFIG.STORAGE_KEYS.END_TIME], (result) => {
