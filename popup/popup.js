@@ -67,7 +67,7 @@ const Utils = {
   },
 };
 
-// Local Storage Operations with better error handling
+// Local Storage Operations with error handling
 const Storage = {
   async get(key) {
     try {
