@@ -21,6 +21,7 @@ const ELEMENTS = new Proxy(
       clock: document.getElementById("clock"),
     },
     preset: {
+      header: document.querySelector(".preset-header"),
       createButton: document.getElementById("create_preset"),
       form: document.getElementById("preset_form"),
       cancelButton: document.getElementById("cancel_preset"),
@@ -246,12 +247,12 @@ const PresetFormManager = {
 
   showForm() {
     ELEMENTS.preset.form.style.display = "block";
-    ELEMENTS.preset.createButton.style.display = "none";
+    ELEMENTS.preset.header.style.display = "none";
   },
 
   hideForm() {
     ELEMENTS.preset.form.style.display = "none";
-    ELEMENTS.preset.createButton.style.display = "block";
+    ELEMENTS.preset.header.style.display = "block";
     this.clearForm();
   },
 
