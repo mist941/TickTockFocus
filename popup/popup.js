@@ -329,7 +329,7 @@ const PresetFormManager = {
     input.value = input.value.replace(/[^\d]/g, "");
 
     if (input.value.length > 2) {
-      input.value = input.value.slice(0, 2);
+      input.value.slice(0, 2);
     }
 
     const numValue = parseInt(input.value);
@@ -455,6 +455,8 @@ const initializeApp = async () => {
 
     PresetFormManager.initializeInputLimits();
     PresetFormManager.initializeEventListeners();
+
+    TimerManager.initialize();
   } catch (error) {
     console.error("Error initializing app:", error);
   }
