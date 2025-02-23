@@ -600,13 +600,6 @@ const initializeApp = async () => {
 
     PresetFormManager.initializeInputLimits();
     PresetFormManager.initializeEventListeners();
-
-    // Add message listener for timer completion
-    chrome.runtime.onMessage.addListener((message) => {
-      if (message.action === "TIMER_COMPLETE") {
-        TimerManager.handleTimerComplete();
-      }
-    });
   } catch (error) {
     console.error("Error initializing app:", error);
   }
