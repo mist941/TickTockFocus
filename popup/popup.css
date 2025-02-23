@@ -321,11 +321,13 @@ input[type="number"]::-webkit-inner-spin-button {
   color: var(--color-text-light);
 }
 
-.timer-presets {
-  margin: var(--spacing-lg) 0;
+.timer-controls {
   display: flex;
   gap: var(--spacing-md);
   justify-content: center;
+  flex-direction: column;
+  max-width: 250px;
+  margin: 0 auto;
 }
 
 .preset-select {
@@ -349,5 +351,43 @@ input[type="number"]::-webkit-inner-spin-button {
 
   option {
     background-color: var(--color-bg-secondary);
+  }
+}
+
+.saved-presets-list {
+  margin: var(--spacing-lg) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.saved-preset-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md);
+  background-color: var(--color-bg-tertiary);
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-bg-hover);
+  }
+}
+
+.saved-preset-name {
+  font-weight: bold;
+}
+
+.saved-preset-delete {
+  background: none;
+  border: none;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-size: var(--font-size-lg);
+  padding: 0 var(--spacing-sm);
+
+  &:hover {
+    color: var(--color-text-danger);
   }
 }

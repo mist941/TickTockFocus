@@ -66,6 +66,17 @@ const Utils = {
     element.className = className;
     return element;
   },
+
+  generateUUID() {
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+      /[xy]/g,
+      function (c) {
+        const r = (Math.random() * 16) | 0;
+        const v = c === "x" ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      }
+    );
+  },
 };
 
 // Local Storage Operations with error handling
@@ -247,6 +258,39 @@ const TimerManager = {
     chrome.alarms.clear("countdown");
     this.resetTimer();
   },
+
+  async loadPresets() {
+    const presetSelect = document.getElementById("preset_select");
+
+    try {
+      const presets = await Storage.getPresets();
+
+      presetSelect.innerHTML = '<option value="">Select preset</option>';
+
+      presets.forEach((preset) => {
+        const option = document.createElement("option");
+        option.value = preset.id;
+        option.textContent = preset.name;
+        presetSelect.appendChild(option);
+      });
+
+      presetSelect.addEventListener("change", () => {
+        const selectedPreset = presets.find((p) => p.id === presetSelect.value);
+        if (selectedPreset?.clocks?.[0]) {
+          const firstClock = selectedPreset.clocks[0];
+          // Convert all values to seconds for precise calculation
+          const totalSeconds =
+            firstClock.hours * 3600 +
+            firstClock.minutes * 60 +
+            firstClock.seconds;
+          // Convert back to minutes with decimal points for precise timing
+          ELEMENTS.timer.minutesInput.value = (totalSeconds / 60).toFixed(2);
+        }
+      });
+    } catch (error) {
+      console.error("Error loading presets:", error);
+    }
+  },
 };
 
 // Preset Form Management with improved validation and error handling
@@ -283,14 +327,14 @@ const PresetFormManager = {
     try {
       const presetName = ELEMENTS.preset.inputs.name.value.trim();
       if (!presetName) {
-        return;
+        throw new Error("Preset name is required");
       }
 
       const clockItems = Array.from(
         ELEMENTS.preset.list.querySelectorAll(".preset-item")
       );
       if (clockItems.length === 0) {
-        return;
+        throw new Error("Add at least one clock to the preset");
       }
 
       const clocks = clockItems.map((item, index) => {
@@ -304,13 +348,18 @@ const PresetFormManager = {
       });
 
       const preset = {
+        id: Utils.generateUUID(),
         name: presetName,
         clocks: clocks,
+        createdAt: Date.now(),
       };
 
       await Storage.savePreset(preset);
-      this.clearClocksList();
       this.hideForm();
+      await this.loadSavedPresets();
+      if (TimerManager.loadPresets) {
+        await TimerManager.loadPresets();
+      }
     } catch (error) {
       console.error("Error saving preset:", error);
     }
@@ -412,6 +461,54 @@ const PresetFormManager = {
     });
   },
 
+  async loadSavedPresets() {
+    try {
+      const presetsList = document.querySelector(".saved-presets-list");
+      const presets = await Storage.getPresets();
+
+      presetsList.innerHTML = "";
+
+      presets.forEach((preset) => {
+        const presetItem = document.createElement("div");
+        presetItem.className = "saved-preset-item";
+        presetItem.dataset.presetId = preset.id;
+
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "saved-preset-name";
+        nameSpan.textContent = preset.name;
+
+        const deleteButton = document.createElement("button");
+        deleteButton.className = "saved-preset-delete";
+        deleteButton.innerHTML = "×";
+        deleteButton.title = "Delete preset";
+
+        deleteButton.addEventListener("click", async () => {
+          await this.deletePreset(preset.id);
+        });
+
+        presetItem.appendChild(nameSpan);
+        presetItem.appendChild(deleteButton);
+        presetsList.appendChild(presetItem);
+      });
+    } catch (error) {
+      console.error("Error loading saved presets:", error);
+    }
+  },
+
+  async deletePreset(presetId) {
+    try {
+      const presets = await Storage.getPresets();
+      const updatedPresets = presets.filter((p) => p.id !== presetId);
+      await Storage.set(CONFIG.STORAGE_KEYS.PRESETS, updatedPresets);
+      await this.loadSavedPresets();
+      if (TimerManager.loadPresets) {
+        await TimerManager.loadPresets();
+      }
+    } catch (error) {
+      console.error("Error deleting preset:", error);
+    }
+  },
+
   initializeEventListeners() {
     const addClockButton = document.getElementById("add_preset_clock");
     if (addClockButton) {
@@ -421,6 +518,7 @@ const PresetFormManager = {
     }
 
     this.initializePresetsList();
+    this.loadSavedPresets();
   },
 };
 
