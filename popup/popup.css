@@ -339,6 +339,7 @@ input[type="number"]::-webkit-inner-spin-button {
   font-size: var(--font-size-md);
   cursor: pointer;
   min-width: 120px;
+  outline: none;
 
   &:disabled {
     opacity: 0.5;
