@@ -212,7 +212,12 @@ const TimerManager = {
 
   updateCountdown() {
     chrome.storage.local.get(
-      [CONFIG.STORAGE_KEYS.END_TIME, "currentPreset", "currentClockIndex"],
+      [
+        CONFIG.STORAGE_KEYS.END_TIME,
+        "currentPreset",
+        "currentClockIndex",
+        "totalTime", // Get the total time
+      ],
       (result) => {
         if (!result.endTime) return;
 
@@ -220,26 +225,26 @@ const TimerManager = {
         if (result.currentPreset) {
           this.currentPreset = result.currentPreset;
           this.currentClockIndex = result.currentClockIndex;
+          this.totalTime = result.totalTime; // Restore the total time
         }
 
-        const remaining = result.endTime - Date.now();
+        const remaining = Math.max(0, result.endTime - Date.now());
 
-        if (remaining > 0) {
-          const minutes = Math.floor(remaining / 60000);
-          const seconds = Math.floor((remaining % 60000) / 1000);
-          ELEMENTS.timer.countdownDisplay.textContent = `${Utils.padNumber(
-            minutes
-          )}:${Utils.padNumber(seconds)}`;
+        const minutes = Math.floor(remaining / 60000);
+        const seconds = Math.floor((remaining % 60000) / 1000);
+        ELEMENTS.timer.countdownDisplay.textContent = `${Utils.padNumber(
+          minutes
+        )}:${Utils.padNumber(seconds)}`;
 
-          // Calculate and update progress
-          const percentage = (remaining / this.totalTime) * 100;
-          this.updateCircleProgress(percentage);
+        // Calculate and update progress
+        const percentage = (remaining / this.totalTime) * 100;
+        this.updateCircleProgress(percentage);
 
-          setTimeout(() => this.updateCountdown(), CONFIG.UPDATE_INTERVAL);
-        } else {
+        if (remaining <= 0) {
           console.log("Timer complete");
-
           this.handleTimerComplete();
+        } else {
+          setTimeout(() => this.updateCountdown(), CONFIG.UPDATE_INTERVAL);
         }
       }
     );
@@ -287,6 +292,7 @@ const TimerManager = {
       currentClockIndex: this.currentClockIndex,
       presetId: this.currentPreset.id,
       currentPreset: this.currentPreset,
+      totalTime: this.totalTime, // Store the total time
     });
 
     // Create alarm using exact timestamp instead of delay
@@ -313,6 +319,7 @@ const TimerManager = {
         "currentClockIndex",
         "presetId",
         "currentPreset",
+        "totalTime", // Also remove the total time
       ]);
       chrome.alarms.clear("countdown");
       this.resetTimer();
@@ -332,6 +339,7 @@ const TimerManager = {
       "currentClockIndex",
       "presetId",
       "currentPreset",
+      "totalTime", // Also remove the total time
     ]);
     chrome.alarms.clear("countdown");
     this.currentClockIndex = 0;
