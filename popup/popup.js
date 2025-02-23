@@ -14,11 +14,10 @@ const CONFIG = {
 const ELEMENTS = new Proxy(
   {
     timer: {
-      minutesInput: document.getElementById("minutes"),
-      startButton: document.getElementById("start"),
-      stopButton: document.getElementById("stop"),
+      toggleButton: document.getElementById("timer_toggle"),
       countdownDisplay: document.getElementById("countdown"),
       clock: document.getElementById("clock"),
+      presetSelect: document.getElementById("preset_select"),
     },
     preset: {
       header: document.querySelector(".preset-header"),
@@ -199,6 +198,8 @@ const ClockManager = {
 // Timer Management with state handling
 const TimerManager = {
   totalTime: 0,
+  currentClockIndex: 0,
+  currentPreset: null,
   remainingTime: 0,
   timerInterval: null,
 
@@ -227,24 +228,85 @@ const TimerManager = {
 
         setTimeout(() => this.updateCountdown(), CONFIG.UPDATE_INTERVAL);
       } else {
-        this.resetTimer();
+        this.handleTimerComplete();
       }
     });
   },
 
-  startTimer() {
-    const minutes = parseInt(ELEMENTS.timer.minutesInput.value);
-    if (!Utils.validateTimeInput(minutes)) return;
+  updateToggleButton(isRunning) {
+    if (ELEMENTS.timer.toggleButton) {
+      ELEMENTS.timer.toggleButton.textContent = isRunning ? "Stop" : "Start";
+    }
+  },
 
-    this.totalTime = minutes * 60000; // Convert to milliseconds
+  async startTimer() {
+    const selectedPresetId = ELEMENTS.timer.presetSelect.value;
+    if (!selectedPresetId) {
+      console.error("No preset selected");
+      return;
+    }
+
+    const presets = await Storage.getPresets();
+    const selectedPreset = presets.find((p) => p.id === selectedPresetId);
+    if (!selectedPreset?.clocks?.length) {
+      console.error("Invalid preset selected");
+      return;
+    }
+
+    this.currentPreset = selectedPreset;
+    this.currentClockIndex = 0;
+    this.startCurrentClock();
+  },
+
+  startCurrentClock() {
+    const currentClock = this.currentPreset.clocks[this.currentClockIndex];
+
+    // Convert all values to milliseconds
+    this.totalTime =
+      (currentClock.hours * 3600 +
+        currentClock.minutes * 60 +
+        currentClock.seconds) *
+      1000;
+
     const endTime = Date.now() + this.totalTime;
 
-    chrome.storage.local.set({ [CONFIG.STORAGE_KEYS.END_TIME]: endTime });
+    chrome.storage.local.set({
+      [CONFIG.STORAGE_KEYS.END_TIME]: endTime,
+      currentClockIndex: this.currentClockIndex,
+      presetId: this.currentPreset.id,
+    });
+
     chrome.alarms.create("countdown", { periodInMinutes: 1 });
 
     // Reset circle progress
     this.updateCircleProgress(100);
     this.updateCountdown();
+    this.updateToggleButton(true);
+  },
+
+  handleTimerComplete() {
+    this.currentClockIndex++;
+
+    // If there are more clocks in the preset, start the next one
+    if (this.currentClockIndex < this.currentPreset.clocks.length) {
+      chrome.notifications.create({
+        type: "basic",
+        iconUrl: "icons/chronometer.png",
+        title: "Timer finished",
+        message: `Timer ${this.currentClockIndex} completed! Starting next timer...`,
+      });
+      this.startCurrentClock();
+    } else {
+      // All timers completed
+      chrome.notifications.create({
+        type: "basic",
+        iconUrl: "icons/chronometer.png",
+        title: "All timers completed!",
+        message: "Preset sequence finished!",
+      });
+      this.resetTimer();
+      this.updateToggleButton(false);
+    }
   },
 
   resetTimer() {
@@ -254,16 +316,32 @@ const TimerManager = {
   },
 
   stopTimer() {
-    chrome.storage.local.remove(CONFIG.STORAGE_KEYS.END_TIME);
+    chrome.storage.local.remove([
+      CONFIG.STORAGE_KEYS.END_TIME,
+      "currentClockIndex",
+      "presetId",
+    ]);
     chrome.alarms.clear("countdown");
+    this.currentClockIndex = 0;
+    this.currentPreset = null;
     this.resetTimer();
+    this.updateToggleButton(false);
+  },
+
+  toggleTimer() {
+    chrome.storage.local.get([CONFIG.STORAGE_KEYS.END_TIME], (result) => {
+      if (result.endTime) {
+        this.stopTimer();
+      } else {
+        this.startTimer();
+      }
+    });
   },
 
   async loadPresets() {
-    const presetSelect = document.getElementById("preset_select");
-
     try {
       const presets = await Storage.getPresets();
+      const presetSelect = ELEMENTS.timer.presetSelect;
 
       presetSelect.innerHTML = '<option value="">Select preset</option>';
 
@@ -272,20 +350,6 @@ const TimerManager = {
         option.value = preset.id;
         option.textContent = preset.name;
         presetSelect.appendChild(option);
-      });
-
-      presetSelect.addEventListener("change", () => {
-        const selectedPreset = presets.find((p) => p.id === presetSelect.value);
-        if (selectedPreset?.clocks?.[0]) {
-          const firstClock = selectedPreset.clocks[0];
-          // Convert all values to seconds for precise calculation
-          const totalSeconds =
-            firstClock.hours * 3600 +
-            firstClock.minutes * 60 +
-            firstClock.seconds;
-          // Convert back to minutes with decimal points for precise timing
-          ELEMENTS.timer.minutesInput.value = (totalSeconds / 60).toFixed(2);
-        }
       });
     } catch (error) {
       console.error("Error loading presets:", error);
@@ -357,9 +421,7 @@ const PresetFormManager = {
       await Storage.savePreset(preset);
       this.hideForm();
       await this.loadSavedPresets();
-      if (TimerManager.loadPresets) {
-        await TimerManager.loadPresets();
-      }
+      await TimerManager.loadPresets();
     } catch (error) {
       console.error("Error saving preset:", error);
     }
@@ -501,9 +563,7 @@ const PresetFormManager = {
       const updatedPresets = presets.filter((p) => p.id !== presetId);
       await Storage.set(CONFIG.STORAGE_KEYS.PRESETS, updatedPresets);
       await this.loadSavedPresets();
-      if (TimerManager.loadPresets) {
-        await TimerManager.loadPresets();
-      }
+      await TimerManager.loadPresets();
     } catch (error) {
       console.error("Error deleting preset:", error);
     }
@@ -528,16 +588,11 @@ const initializeApp = async () => {
     TabManager.initializeTabs();
     ClockManager.startClockUpdate();
     TimerManager.updateCountdown();
+    TimerManager.loadPresets();
 
-    // Timer event listeners
-    ELEMENTS.timer.startButton?.addEventListener("click", () =>
-      TimerManager.startTimer()
-    );
-    ELEMENTS.timer.stopButton?.addEventListener("click", () =>
-      TimerManager.stopTimer()
-    );
-    ELEMENTS.timer.clock?.addEventListener("click", () =>
-      ClockManager.toggleTimeFormat()
+    // Replace separate start/stop listeners with single toggle
+    ELEMENTS.timer.toggleButton?.addEventListener("click", () =>
+      TimerManager.toggleTimer()
     );
 
     // Preset form event listeners
@@ -553,6 +608,13 @@ const initializeApp = async () => {
 
     PresetFormManager.initializeInputLimits();
     PresetFormManager.initializeEventListeners();
+
+    // Add message listener for timer completion
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message.action === "TIMER_COMPLETE") {
+        TimerManager.handleTimerComplete();
+      }
+    });
   } catch (error) {
     console.error("Error initializing app:", error);
   }
