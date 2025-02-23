@@ -276,7 +276,9 @@ const TimerManager = {
       presetId: this.currentPreset.id,
     });
 
-    chrome.alarms.create("countdown", { periodInMinutes: 1 });
+    // Create alarm for the exact duration
+    const minutes = Math.ceil(this.totalTime / 60000);
+    chrome.alarms.create("countdown", { delayInMinutes: minutes });
 
     // Reset circle progress
     this.updateCircleProgress(100);
@@ -288,22 +290,11 @@ const TimerManager = {
     this.currentClockIndex++;
 
     // If there are more clocks in the preset, start the next one
-    if (this.currentClockIndex < this.currentPreset.clocks.length) {
-      chrome.notifications.create({
-        type: "basic",
-        iconUrl: "icons/chronometer.png",
-        title: "Timer finished",
-        message: `Timer ${this.currentClockIndex} completed! Starting next timer...`,
-      });
+    if (this.currentClockIndex < this.currentPreset.clocks?.length) {
       this.startCurrentClock();
     } else {
       // All timers completed
-      chrome.notifications.create({
-        type: "basic",
-        iconUrl: "icons/chronometer.png",
-        title: "All timers completed!",
-        message: "Preset sequence finished!",
-      });
+
       this.resetTimer();
       this.updateToggleButton(false);
     }
