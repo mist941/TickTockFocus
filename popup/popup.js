@@ -455,8 +455,6 @@ const initializeApp = async () => {
 
     PresetFormManager.initializeInputLimits();
     PresetFormManager.initializeEventListeners();
-
-    TimerManager.initialize();
   } catch (error) {
     console.error("Error initializing app:", error);
   }
