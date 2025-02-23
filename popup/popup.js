@@ -276,9 +276,10 @@ const TimerManager = {
       presetId: this.currentPreset.id,
     });
 
-    // Create alarm for the exact duration
-    const minutes = Math.ceil(this.totalTime / 60000);
-    chrome.alarms.create("countdown", { delayInMinutes: minutes });
+    // Create alarm using exact timestamp instead of delay
+    chrome.alarms.create("countdown", {
+      when: endTime,
+    });
 
     // Reset circle progress
     this.updateCircleProgress(100);
