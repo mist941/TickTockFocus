@@ -216,7 +216,7 @@ const TimerManager = {
         CONFIG.STORAGE_KEYS.END_TIME,
         "currentPreset",
         "currentClockIndex",
-        "totalTime", // Get the total time
+        "totalTime",
       ],
       (result) => {
         if (!result.endTime) return;
@@ -225,10 +225,18 @@ const TimerManager = {
         if (result.currentPreset) {
           this.currentPreset = result.currentPreset;
           this.currentClockIndex = result.currentClockIndex;
-          this.totalTime = result.totalTime; // Restore the total time
+          this.totalTime = result.totalTime;
         }
 
-        const remaining = Math.max(0, result.endTime - Date.now());
+        const now = Date.now();
+        const endTime = parseInt(result.endTime);
+        const remaining = endTime - now;
+
+        // Consider timer complete when less than 1 second remains
+        if (remaining <= 1000) {
+          this.handleTimerComplete();
+          return;
+        }
 
         const minutes = Math.floor(remaining / 60000);
         const seconds = Math.floor((remaining % 60000) / 1000);
@@ -240,12 +248,7 @@ const TimerManager = {
         const percentage = (remaining / this.totalTime) * 100;
         this.updateCircleProgress(percentage);
 
-        if (remaining <= 0) {
-          console.log("Timer complete");
-          this.handleTimerComplete();
-        } else {
-          setTimeout(() => this.updateCountdown(), CONFIG.UPDATE_INTERVAL);
-        }
+        setTimeout(() => this.updateCountdown(), CONFIG.UPDATE_INTERVAL);
       }
     );
   },
@@ -319,8 +322,9 @@ const TimerManager = {
         "currentClockIndex",
         "presetId",
         "currentPreset",
-        "totalTime", // Also remove the total time
+        "totalTime",
       ]);
+
       chrome.alarms.clear("countdown");
       this.resetTimer();
       this.updateToggleButton(false);
@@ -339,7 +343,7 @@ const TimerManager = {
       "currentClockIndex",
       "presetId",
       "currentPreset",
-      "totalTime", // Also remove the total time
+      "totalTime",
     ]);
     chrome.alarms.clear("countdown");
     this.currentClockIndex = 0;
@@ -373,6 +377,17 @@ const TimerManager = {
       });
     } catch (error) {
       console.error("Error loading presets:", error);
+    }
+  },
+
+  async restoreSelectedPreset() {
+    try {
+      const { presetId } = await chrome.storage.local.get("presetId");
+      if (presetId && ELEMENTS.timer.presetSelect) {
+        ELEMENTS.timer.presetSelect.value = presetId;
+      }
+    } catch (error) {
+      console.error("Error restoring selected preset:", error);
     }
   },
 };
@@ -609,6 +624,7 @@ const initializeApp = async () => {
     ClockManager.startClockUpdate();
     TimerManager.updateCountdown();
     TimerManager.loadPresets();
+    TimerManager.restoreSelectedPreset();
 
     // Replace separate start/stop listeners with single toggle
     ELEMENTS.timer.toggleButton?.addEventListener("click", () =>

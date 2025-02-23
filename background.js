@@ -1,16 +1,20 @@
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "countdown") {
-    chrome.storage.local.get(["endTime"], (result) => {
-      if (!result.endTime) return;
+    chrome.storage.local.get(["alarmInfo"], (result) => {
+      if (result.alarmInfo) {
+        const { presetName, clockIndex, totalClocks } = result.alarmInfo;
 
-      const remaining = result.endTime - Date.now();
-      if (remaining <= 0) {
-        chrome.storage.local.remove("endTime");
+        const isLastClock = clockIndex === totalClocks - 1;
+        const message = isLastClock
+          ? `Timer "${presetName}" completed!`
+          : `Clock ${clockIndex + 1} of "${presetName}" completed!`;
+
         chrome.notifications.create({
           type: "basic",
-          iconUrl: "icons/chronometer.png",
-          title: "Timer finished",
-          message: "Time expired!",
+          iconUrl: "icon/chronometer.png",
+          title: "Timer Complete",
+          message: message,
+          priority: 2,
         });
       }
     });
