@@ -298,7 +298,7 @@ const TimerManager = {
       totalTime: this.totalTime, // Store the total time
     });
 
-    // Create alarm using exact timestamp instead of delay
+    // Create alarm using exact timestamp
     chrome.alarms.create("countdown", {
       when: endTime,
     });
