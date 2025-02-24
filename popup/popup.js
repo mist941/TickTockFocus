@@ -261,9 +261,10 @@ const TimerManager = {
           this.totalDuration = result.totalDuration;
           this.updateCountdown();
           this.timer = setInterval(() => this.updateCountdown(), 1000);
+          this.updateToggleButton(true);
         } else if (result.timerProgress !== undefined) {
-          // Restore the progress circle even if timer is not running
           this.updateCircleProgress(result.timerProgress);
+          this.updateToggleButton(false);
         }
       }
     );
@@ -282,6 +283,7 @@ const TimerManager = {
       selectedPresetId: ELEMENTS.timer.presetSelect.value,
     });
 
+    this.updateToggleButton(true);
     this.updateCountdown();
     this.timer = setInterval(() => this.updateCountdown(), 1000);
   },
@@ -329,12 +331,24 @@ const TimerManager = {
     this.timer = null;
     this.endTime = null;
     this.totalDuration = null;
+
+    // Reset countdown display to zeros
+    ELEMENTS.timer.countdownDisplay.textContent = "00:00";
+
+    // Reset preset selector
+    if (ELEMENTS.timer.presetSelect) {
+      ELEMENTS.timer.presetSelect.value = "";
+    }
+
     this.updateCircleProgress(0);
+    this.updateToggleButton(false);
+
     chrome.storage.local.set({
       isRunning: false,
       endTime: null,
       totalDuration: null,
       timerProgress: 0,
+      selectedPresetId: null, // Clear selected preset in storage
     });
   },
 
@@ -358,6 +372,12 @@ const TimerManager = {
         this.startTimer(duration);
       }
     });
+  },
+
+  updateToggleButton(isRunning) {
+    const button = ELEMENTS.timer.toggleButton;
+    if (!button) return;
+    button.textContent = isRunning ? "Stop" : "Start";
   },
 };
 
