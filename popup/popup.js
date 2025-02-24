@@ -80,7 +80,7 @@ const Utils = {
 
 // Local Storage Operations with error handling
 const Storage = {
-  async get(key) {
+  get(key) {
     try {
       const data = localStorage.getItem(key);
       return data ? JSON.parse(data) : null;
@@ -90,7 +90,7 @@ const Storage = {
     }
   },
 
-  async set(key, value) {
+  set(key, value) {
     try {
       localStorage.setItem(key, JSON.stringify(value));
       return true;
@@ -100,22 +100,22 @@ const Storage = {
     }
   },
 
-  async getSettings() {
-    return (await this.get(CONFIG.STORAGE_KEYS.SETTINGS)) || {};
+  getSettings() {
+    return this.get(CONFIG.STORAGE_KEYS.SETTINGS) || {};
   },
 
-  async setSettings(key, value) {
-    const settings = await this.getSettings();
+  setSettings(key, value) {
+    const settings = this.getSettings();
     settings[key] = value;
     return this.set(CONFIG.STORAGE_KEYS.SETTINGS, settings);
   },
 
-  async getPresets() {
-    return (await this.get(CONFIG.STORAGE_KEYS.PRESETS)) || [];
+  getPresets() {
+    return this.get(CONFIG.STORAGE_KEYS.PRESETS) || [];
   },
 
   async savePreset(preset) {
-    const presets = await this.getPresets();
+    const presets = this.getPresets();
     return this.set(CONFIG.STORAGE_KEYS.PRESETS, [...presets, preset]);
   },
 };
@@ -166,10 +166,10 @@ const ClockManager = {
     )} ${amPm}`;
   },
 
-  async updateClock() {
+  updateClock() {
     try {
       const now = new Date();
-      const settings = await Storage.getSettings();
+      const settings = Storage.getSettings();
       const timeFormat = settings.timeFormat || CONFIG.DEFAULT_TIME_FORMAT;
 
       ELEMENTS.timer.clock.textContent = this.formatTime(
@@ -182,11 +182,11 @@ const ClockManager = {
     }
   },
 
-  async toggleTimeFormat() {
-    const settings = await Storage.getSettings();
+  toggleTimeFormat() {
+    const settings = Storage.getSettings();
     const newFormat = settings.timeFormat === "12h" ? "24h" : "12h";
-    await Storage.setSettings("timeFormat", newFormat);
-    await this.updateClock();
+    Storage.setSettings("timeFormat", newFormat);
+    this.updateClock();
   },
 
   startClockUpdate() {
@@ -197,9 +197,9 @@ const ClockManager = {
 
 // Timer Management with state handling
 const TimerManager = {
-  async loadPresets() {
+  loadPresets() {
     try {
-      const presets = await Storage.getPresets();
+      const presets = Storage.getPresets();
       const presetSelect = ELEMENTS.timer.presetSelect;
 
       presetSelect.innerHTML = '<option value="">Select preset</option>';
@@ -215,9 +215,9 @@ const TimerManager = {
     }
   },
 
-  async restoreSelectedPreset() {
+  restoreSelectedPreset() {
     try {
-      const { presetId } = await chrome.storage.local.get("presetId");
+      const { presetId } = chrome.storage.local.get("presetId");
       if (presetId && ELEMENTS.timer.presetSelect) {
         ELEMENTS.timer.presetSelect.value = presetId;
       }
@@ -257,7 +257,7 @@ const PresetFormManager = {
     this.clearForm();
   },
 
-  async savePreset() {
+  savePreset() {
     try {
       const presetName = ELEMENTS.preset.inputs.name.value.trim();
       if (!presetName) {
@@ -393,10 +393,10 @@ const PresetFormManager = {
     });
   },
 
-  async loadSavedPresets() {
+  loadSavedPresets() {
     try {
       const presetsList = document.querySelector(".saved-presets-list");
-      const presets = await Storage.getPresets();
+      const presets = Storage.getPresets();
 
       presetsList.innerHTML = "";
 
@@ -414,8 +414,8 @@ const PresetFormManager = {
         deleteButton.innerHTML = "×";
         deleteButton.title = "Delete preset";
 
-        deleteButton.addEventListener("click", async () => {
-          await this.deletePreset(preset.id);
+        deleteButton.addEventListener("click", () => {
+          this.deletePreset(preset.id);
         });
 
         presetItem.appendChild(nameSpan);
@@ -427,13 +427,13 @@ const PresetFormManager = {
     }
   },
 
-  async deletePreset(presetId) {
+  deletePreset(presetId) {
     try {
-      const presets = await Storage.getPresets();
+      const presets = Storage.getPresets();
       const updatedPresets = presets.filter((p) => p.id !== presetId);
-      await Storage.set(CONFIG.STORAGE_KEYS.PRESETS, updatedPresets);
-      await this.loadSavedPresets();
-      await TimerManager.loadPresets();
+      Storage.set(CONFIG.STORAGE_KEYS.PRESETS, updatedPresets);
+      this.loadSavedPresets();
+      TimerManager.loadPresets();
     } catch (error) {
       console.error("Error deleting preset:", error);
     }
@@ -453,7 +453,7 @@ const PresetFormManager = {
 };
 
 // Initialize Application with error handling
-const initializeApp = async () => {
+const initializeApp = () => {
   try {
     TabManager.initializeTabs();
     ClockManager.startClockUpdate();
