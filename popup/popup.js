@@ -288,10 +288,10 @@ const PresetFormManager = {
         createdAt: Date.now(),
       };
 
-      await Storage.savePreset(preset);
+      Storage.savePreset(preset);
       this.hideForm();
-      await this.loadSavedPresets();
-      await TimerManager.loadPresets();
+      this.loadSavedPresets();
+      TimerManager.loadPresets();
     } catch (error) {
       console.error("Error saving preset:", error);
     }
