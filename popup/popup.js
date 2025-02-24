@@ -623,6 +623,11 @@ const initializeApp = () => {
     TimerManager.restoreSelectedPreset();
     TimerManager.restoreTimerState();
 
+    // Toggle time format
+    ELEMENTS.timer.clock.addEventListener("click", () => {
+      ClockManager.toggleTimeFormat();
+    });
+
     // Replace separate start/stop listeners with single toggle
     ELEMENTS.timer.toggleButton?.addEventListener("click", () =>
       TimerManager.toggleTimer()
