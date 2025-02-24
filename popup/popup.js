@@ -271,44 +271,78 @@ const TimerManager = {
   },
 
   startTimer(duration) {
-    const now = new Date().getTime();
-    this.endTime = now + duration;
-    this.totalDuration = duration;
+    const selectedPresetId = ELEMENTS.timer.presetSelect.value;
+    const presets = Storage.getPresets();
+    const preset = presets.find((p) => p.id === selectedPresetId);
 
-    // Store timer state and selected preset
-    chrome.storage.local.set({
-      isRunning: true,
-      endTime: this.endTime,
-      totalDuration: duration,
-      selectedPresetId: ELEMENTS.timer.presetSelect.value,
-    });
+    if (!preset) return;
 
-    this.updateToggleButton(true);
+    // Send message to background script to start timer
+    chrome.runtime.sendMessage(
+      {
+        action: "startTimer",
+        duration: duration,
+        presetName: preset.name,
+      },
+      (response) => {
+        if (response.success) {
+          this.updateToggleButton(true);
+          this.startCountdownUpdate();
+        }
+      }
+    );
+  },
+
+  stopTimer() {
+    // Send message to background script to stop timer
+    chrome.runtime.sendMessage(
+      {
+        action: "stopTimer",
+      },
+      (response) => {
+        if (response.success) {
+          clearInterval(this.timer);
+          this.timer = null;
+          ELEMENTS.timer.countdownDisplay.textContent = "00:00";
+          this.updateCircleProgress(0);
+          this.updateToggleButton(false);
+
+          if (ELEMENTS.timer.presetSelect) {
+            ELEMENTS.timer.presetSelect.value = "";
+          }
+        }
+      }
+    );
+  },
+
+  startCountdownUpdate() {
     this.updateCountdown();
     this.timer = setInterval(() => this.updateCountdown(), 1000);
   },
 
   updateCountdown() {
-    const now = new Date().getTime();
-    const timeLeft = this.endTime - now;
+    chrome.storage.local.get(["endTime", "totalDuration"], (result) => {
+      if (!result.endTime) return;
 
-    if (timeLeft <= 0) {
-      this.stopTimer();
-      ELEMENTS.timer.countdownDisplay.textContent = "00:00:00";
-      this.updateCircleProgress(0);
-      return;
-    }
+      const now = Date.now();
+      const timeLeft = result.endTime - now;
 
-    const hours = Math.floor(timeLeft / (1000 * 60 * 60));
-    const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+      if (timeLeft <= 0) {
+        this.stopTimer();
+        return;
+      }
 
-    ELEMENTS.timer.countdownDisplay.textContent = `${Utils.padNumber(
-      hours
-    )}:${Utils.padNumber(minutes)}:${Utils.padNumber(seconds)}`;
+      const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+      const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
 
-    const progress = (timeLeft / this.totalDuration) * 100;
-    this.updateCircleProgress(progress);
+      ELEMENTS.timer.countdownDisplay.textContent = `${Utils.padNumber(
+        hours
+      )}:${Utils.padNumber(minutes)}:${Utils.padNumber(seconds)}`;
+
+      const progress = (timeLeft / result.totalDuration) * 100;
+      this.updateCircleProgress(progress);
+    });
   },
 
   updateCircleProgress(percentage) {
@@ -324,32 +358,6 @@ const TimerManager = {
 
     // Store the progress state
     chrome.storage.local.set({ timerProgress: percentage });
-  },
-
-  stopTimer() {
-    clearInterval(this.timer);
-    this.timer = null;
-    this.endTime = null;
-    this.totalDuration = null;
-
-    // Reset countdown display to zeros
-    ELEMENTS.timer.countdownDisplay.textContent = "00:00";
-
-    // Reset preset selector
-    if (ELEMENTS.timer.presetSelect) {
-      ELEMENTS.timer.presetSelect.value = "";
-    }
-
-    this.updateCircleProgress(0);
-    this.updateToggleButton(false);
-
-    chrome.storage.local.set({
-      isRunning: false,
-      endTime: null,
-      totalDuration: null,
-      timerProgress: 0,
-      selectedPresetId: null, // Clear selected preset in storage
-    });
   },
 
   toggleTimer() {
