@@ -18,6 +18,7 @@ const ELEMENTS = new Proxy(
       countdownDisplay: document.getElementById("countdown"),
       clock: document.getElementById("clock"),
       presetSelect: document.getElementById("preset_select"),
+      progressBar: document.querySelector(".timer-progress-bar"),
     },
     preset: {
       header: document.querySelector(".preset-header"),
@@ -197,6 +198,30 @@ const ClockManager = {
 
 // Timer Management with state handling
 const TimerManager = {
+  timer: null,
+  endTime: null,
+  totalDuration: null,
+
+  getPresetDuration(presetId) {
+    try {
+      const presets = Storage.getPresets();
+      const preset = presets.find((p) => p.id === presetId);
+
+      if (!preset) return null;
+
+      // Calculate total milliseconds from all clocks in the preset
+      return preset.clocks.reduce((total, clock) => {
+        const hours = (clock.hours || 0) * 60 * 60 * 1000;
+        const minutes = (clock.minutes || 0) * 60 * 1000;
+        const seconds = (clock.seconds || 0) * 1000;
+        return total + hours + minutes + seconds;
+      }, 0);
+    } catch (error) {
+      console.error("Error calculating preset duration:", error);
+      return null;
+    }
+  },
+
   loadPresets() {
     try {
       const presets = Storage.getPresets();
@@ -217,13 +242,122 @@ const TimerManager = {
 
   restoreSelectedPreset() {
     try {
-      const { presetId } = chrome.storage.local.get("presetId");
-      if (presetId && ELEMENTS.timer.presetSelect) {
-        ELEMENTS.timer.presetSelect.value = presetId;
-      }
+      chrome.storage.local.get(["selectedPresetId"], (result) => {
+        if (result.selectedPresetId && ELEMENTS.timer.presetSelect) {
+          ELEMENTS.timer.presetSelect.value = result.selectedPresetId;
+        }
+      });
     } catch (error) {
       console.error("Error restoring selected preset:", error);
     }
+  },
+
+  restoreTimerState() {
+    chrome.storage.local.get(
+      ["isRunning", "endTime", "totalDuration", "timerProgress"],
+      (result) => {
+        if (result.isRunning && result.endTime) {
+          this.endTime = result.endTime;
+          this.totalDuration = result.totalDuration;
+          this.updateCountdown();
+          this.timer = setInterval(() => this.updateCountdown(), 1000);
+        } else if (result.timerProgress !== undefined) {
+          // Restore the progress circle even if timer is not running
+          this.updateCircleProgress(result.timerProgress);
+        }
+      }
+    );
+  },
+
+  startTimer(duration) {
+    const now = new Date().getTime();
+    this.endTime = now + duration;
+    this.totalDuration = duration;
+
+    // Store timer state and selected preset
+    chrome.storage.local.set({
+      isRunning: true,
+      endTime: this.endTime,
+      totalDuration: duration,
+      selectedPresetId: ELEMENTS.timer.presetSelect.value,
+    });
+
+    this.updateCountdown();
+    this.timer = setInterval(() => this.updateCountdown(), 1000);
+  },
+
+  updateCountdown() {
+    const now = new Date().getTime();
+    const timeLeft = this.endTime - now;
+
+    if (timeLeft <= 0) {
+      this.stopTimer();
+      ELEMENTS.timer.countdownDisplay.textContent = "00:00:00";
+      this.updateCircleProgress(0);
+      return;
+    }
+
+    const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+    const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+
+    ELEMENTS.timer.countdownDisplay.textContent = `${Utils.padNumber(
+      hours
+    )}:${Utils.padNumber(minutes)}:${Utils.padNumber(seconds)}`;
+
+    const progress = (timeLeft / this.totalDuration) * 100;
+    this.updateCircleProgress(progress);
+  },
+
+  updateCircleProgress(percentage) {
+    const circle = ELEMENTS.timer.progressBar;
+    if (!circle) return;
+
+    const radius = circle.r.baseVal.value;
+    const circumference = radius * 2 * Math.PI;
+    const offset = circumference - (percentage / 100) * circumference;
+
+    circle.style.strokeDasharray = `${circumference} ${circumference}`;
+    circle.style.strokeDashoffset = offset;
+
+    // Store the progress state
+    chrome.storage.local.set({ timerProgress: percentage });
+  },
+
+  stopTimer() {
+    clearInterval(this.timer);
+    this.timer = null;
+    this.endTime = null;
+    this.totalDuration = null;
+    this.updateCircleProgress(0);
+    chrome.storage.local.set({
+      isRunning: false,
+      endTime: null,
+      totalDuration: null,
+      timerProgress: 0,
+    });
+  },
+
+  toggleTimer() {
+    chrome.storage.local.get(["isRunning", "endTime"], (result) => {
+      if (result.isRunning) {
+        this.stopTimer();
+      } else {
+        const selectedPresetId = ELEMENTS.timer.presetSelect.value;
+        if (!selectedPresetId) {
+          console.error("No preset selected");
+          return;
+        }
+
+        const duration = this.getPresetDuration(selectedPresetId);
+        if (!duration) {
+          console.error("Invalid preset duration");
+          return;
+        }
+
+        this.startTimer(duration);
+      }
+    });
   },
 };
 
@@ -459,11 +593,17 @@ const initializeApp = () => {
     ClockManager.startClockUpdate();
     TimerManager.loadPresets();
     TimerManager.restoreSelectedPreset();
+    TimerManager.restoreTimerState();
 
     // Replace separate start/stop listeners with single toggle
     ELEMENTS.timer.toggleButton?.addEventListener("click", () =>
       TimerManager.toggleTimer()
     );
+
+    // Save selected preset when changed
+    ELEMENTS.timer.presetSelect?.addEventListener("change", (e) => {
+      chrome.storage.local.set({ selectedPresetId: e.target.value });
+    });
 
     // Preset form event listeners
     ELEMENTS.preset.createButton?.addEventListener("click", () =>
