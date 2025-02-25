@@ -254,7 +254,7 @@ const TimerManager = {
 
   restoreTimerState() {
     chrome.storage.local.get(
-      ["isRunning", "endTime", "totalDuration", "timerProgress"],
+      ["isRunning", "endTime", "totalDuration", "timerProgress", "clocks"],
       (result) => {
         if (result.isRunning && result.endTime) {
           this.endTime = result.endTime;
@@ -277,12 +277,16 @@ const TimerManager = {
 
     if (!preset) return;
 
+    // Draw points on the circle when the timer starts
+    this.drawPresetPoints(preset.clocks);
+
     // Send message to background script to start timer
     chrome.runtime.sendMessage(
       {
         action: "startTimer",
         duration: duration,
         presetName: preset.name,
+        clocks: preset.clocks,
       },
       (response) => {
         if (response.success) {
@@ -291,6 +295,35 @@ const TimerManager = {
         }
       }
     );
+  },
+
+  drawPresetPoints(clocks) {
+    const circle = ELEMENTS.timer.progressBar;
+    if (!circle) return;
+
+    const svgNamespace = "http://www.w3.org/2000/svg";
+    const centerX = circle.cx.baseVal.value;
+    const centerY = circle.cy.baseVal.value;
+    const radius = circle.r.baseVal.value;
+
+    // Clear existing points
+    const existingPoints = document.querySelectorAll(".preset-point");
+    existingPoints.forEach((point) => point.remove());
+
+    clocks.forEach((clock) => {
+      const point = document.createElementNS(svgNamespace, "circle");
+      const angle = (clock.position / clocks.length) * 2 * Math.PI;
+      const pointX = centerX + radius * Math.cos(angle);
+      const pointY = centerY + radius * Math.sin(angle);
+
+      point.setAttribute("class", "preset-point");
+      point.setAttribute("cx", pointX);
+      point.setAttribute("cy", pointY);
+      point.setAttribute("r", 5);
+      point.setAttribute("fill", "rgb(234 179 8)");
+
+      circle.parentNode.appendChild(point);
+    });
   },
 
   stopTimer() {
@@ -321,28 +354,32 @@ const TimerManager = {
   },
 
   updateCountdown() {
-    chrome.storage.local.get(["endTime", "totalDuration"], (result) => {
-      if (!result.endTime) return;
+    chrome.storage.local.get(
+      ["endTime", "totalDuration", "clocks"],
+      (result) => {
+        if (!result.endTime) return;
 
-      const now = Date.now();
-      const timeLeft = result.endTime - now;
+        const now = Date.now();
+        const timeLeft = result.endTime - now;
 
-      if (timeLeft <= 0) {
-        this.stopTimer();
-        return;
+        if (timeLeft <= 0) {
+          this.stopTimer();
+          return;
+        }
+
+        const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+        const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+
+        ELEMENTS.timer.countdownDisplay.textContent = `${Utils.padNumber(
+          hours
+        )}:${Utils.padNumber(minutes)}:${Utils.padNumber(seconds)}`;
+
+        const progress = (timeLeft / result.totalDuration) * 100;
+
+        this.updateCircleProgress(progress);
       }
-
-      const hours = Math.floor(timeLeft / (1000 * 60 * 60));
-      const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
-
-      ELEMENTS.timer.countdownDisplay.textContent = `${Utils.padNumber(
-        hours
-      )}:${Utils.padNumber(minutes)}:${Utils.padNumber(seconds)}`;
-
-      const progress = (timeLeft / result.totalDuration) * 100;
-      this.updateCircleProgress(progress);
-    });
+    );
   },
 
   updateCircleProgress(percentage) {

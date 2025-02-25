@@ -1,7 +1,7 @@
 // Add timer management to background script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "startTimer") {
-    const { duration, presetName } = request;
+    const { duration, presetName, clocks } = request;
 
     // Clear any existing alarm
     chrome.alarms.clear("countdown", () => {
@@ -17,6 +17,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           endTime: Date.now() + duration,
           totalDuration: duration,
           presetName: presetName,
+          clocks,
         },
         () => {
           sendResponse({ success: true });
