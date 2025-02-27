@@ -370,13 +370,14 @@ const TimerManager = {
       const totalMinutes = Math.floor(
         (accumulatedTime % (1000 * 60 * 60)) / (1000 * 60)
       );
+      const totalSeconds = Math.floor((accumulatedTime % (1000 * 60)) / 1000);
       const timeText = `${Utils.padNumber(totalHours)}:${Utils.padNumber(
         totalMinutes
-      )}`;
+      )}:${Utils.padNumber(totalSeconds)}`;
 
       // Calculate label width and height
       const labelWidth = 20;
-      const labelHeight = 50;
+      const labelHeight = 60;
 
       // Position foreignObject
       foreignObject.setAttribute("x", labelX - labelWidth / 2);
