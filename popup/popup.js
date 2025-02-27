@@ -342,8 +342,8 @@ const TimerManager = {
       // Calculate position based on accumulated time
       const position = accumulatedTime / totalDuration;
 
-      // Calculate angle (subtract from 1 to go clockwise, and offset by -0.25 to start at top)
-      const angle = (1 - position - 0.25) * 2 * Math.PI;
+      // Calculate angle (start from top and go clockwise)
+      const angle = (position - 0.25) * 2 * Math.PI;
 
       // Create point
       const point = document.createElementNS(svgNamespace, "circle");
@@ -365,12 +365,15 @@ const TimerManager = {
       const labelX = centerX + labelRadius * Math.cos(angle);
       const labelY = centerY + labelRadius * Math.sin(angle);
 
-      // Calculate accumulated minutes and seconds for the label
-      const totalMinutes = Math.floor(accumulatedTime / (1000 * 60));
+      // Calculate accumulated hours, minutes and seconds for the label
+      const totalHours = Math.floor(accumulatedTime / (1000 * 60 * 60));
+      const totalMinutes = Math.floor(
+        (accumulatedTime % (1000 * 60 * 60)) / (1000 * 60)
+      );
       const totalSeconds = Math.floor((accumulatedTime % (1000 * 60)) / 1000);
-      const timeText = `${Utils.padNumber(totalMinutes)}:${Utils.padNumber(
-        totalSeconds
-      )}`;
+      const timeText = `${Utils.padNumber(totalHours)}:${Utils.padNumber(
+        totalMinutes
+      )}:${Utils.padNumber(totalSeconds)}`;
 
       // Calculate label width and height
       const labelWidth = 20;
