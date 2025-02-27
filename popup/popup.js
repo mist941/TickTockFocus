@@ -324,7 +324,7 @@ const TimerManager = {
     );
     existingElements.forEach((element) => element.remove());
 
-    // Calculate total duration and setup
+    // Calculate total duration
     const totalDuration = clocks.reduce((total, clock) => {
       const clockMs =
         (clock.hours * 3600 + clock.minutes * 60 + clock.seconds) * 1000;
@@ -334,10 +334,13 @@ const TimerManager = {
     let accumulatedTime = 0;
 
     clocks.forEach((clock) => {
+      // Add current clock duration to accumulated time
       const clockMs =
         (clock.hours * 3600 + clock.minutes * 60 + clock.seconds) * 1000;
-      const position = accumulatedTime / totalDuration;
       accumulatedTime += clockMs;
+
+      // Calculate position based on accumulated time
+      const position = accumulatedTime / totalDuration;
 
       // Calculate angle (subtract from 1 to go clockwise, and offset by -0.25 to start at top)
       const angle = (1 - position - 0.25) * 2 * Math.PI;
@@ -362,9 +365,11 @@ const TimerManager = {
       const labelX = centerX + labelRadius * Math.cos(angle);
       const labelY = centerY + labelRadius * Math.sin(angle);
 
-      const minutes = clock.hours * 60 + clock.minutes;
-      const timeText = `${Utils.padNumber(minutes)}:${Utils.padNumber(
-        clock.seconds
+      // Calculate accumulated minutes and seconds for the label
+      const totalMinutes = Math.floor(accumulatedTime / (1000 * 60));
+      const totalSeconds = Math.floor((accumulatedTime % (1000 * 60)) / 1000);
+      const timeText = `${Utils.padNumber(totalMinutes)}:${Utils.padNumber(
+        totalSeconds
       )}`;
 
       // Calculate label width and height
