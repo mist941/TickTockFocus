@@ -343,7 +343,7 @@ const TimerManager = {
       const position = accumulatedTime / totalDuration;
 
       // Calculate angle (start from top and go clockwise)
-      const angle = (position - 0.5) * 2 * Math.PI;
+      const angle = (0 - position) * 2 * Math.PI;
 
       // Create point
       const point = document.createElementNS(svgNamespace, "circle");
