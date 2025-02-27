@@ -254,7 +254,14 @@ const TimerManager = {
 
   restoreTimerState() {
     chrome.storage.local.get(
-      ["isRunning", "endTime", "totalDuration", "timerProgress", "clocks"],
+      [
+        "isRunning",
+        "endTime",
+        "totalDuration",
+        "timerProgress",
+        "clocks",
+        "selectedPresetId",
+      ],
       (result) => {
         if (result.isRunning && result.endTime) {
           this.endTime = result.endTime;
@@ -262,6 +269,11 @@ const TimerManager = {
           this.updateCountdown();
           this.timer = setInterval(() => this.updateCountdown(), 1000);
           this.updateToggleButton(true);
+
+          // Redraw points if timer is running and we have clocks data
+          if (result.clocks) {
+            this.drawPresetPoints(result.clocks);
+          }
         } else if (result.timerProgress !== undefined) {
           this.updateCircleProgress(result.timerProgress);
           this.updateToggleButton(false);
@@ -339,6 +351,10 @@ const TimerManager = {
           ELEMENTS.timer.countdownDisplay.textContent = "00:00";
           this.updateCircleProgress(0);
           this.updateToggleButton(false);
+
+          // Remove all preset points
+          const existingPoints = document.querySelectorAll(".preset-point");
+          existingPoints.forEach((point) => point.remove());
 
           if (ELEMENTS.timer.presetSelect) {
             ELEMENTS.timer.presetSelect.value = "";
