@@ -318,13 +318,32 @@ const TimerManager = {
     const centerY = circle.cy.baseVal.value;
     const radius = circle.r.baseVal.value;
 
-    // Clear existing points
-    const existingPoints = document.querySelectorAll(".preset-point");
-    existingPoints.forEach((point) => point.remove());
+    // Clear existing points and labels
+    const existingElements = document.querySelectorAll(
+      ".preset-point, .preset-point-label"
+    );
+    existingElements.forEach((element) => element.remove());
+
+    // Calculate total duration and setup
+    const totalDuration = clocks.reduce((total, clock) => {
+      const clockMs =
+        (clock.hours * 3600 + clock.minutes * 60 + clock.seconds) * 1000;
+      return total + clockMs;
+    }, 0);
+
+    let accumulatedTime = 0;
 
     clocks.forEach((clock) => {
+      const clockMs =
+        (clock.hours * 3600 + clock.minutes * 60 + clock.seconds) * 1000;
+      const position = accumulatedTime / totalDuration;
+      accumulatedTime += clockMs;
+
+      // Calculate angle (subtract from 1 to go clockwise, and offset by -0.25 to start at top)
+      const angle = (1 - position - 0.25) * 2 * Math.PI;
+
+      // Create point
       const point = document.createElementNS(svgNamespace, "circle");
-      const angle = (clock.position / clocks.length) * 2 * Math.PI;
       const pointX = centerX + radius * Math.cos(angle);
       const pointY = centerY + radius * Math.sin(angle);
 
@@ -334,7 +353,40 @@ const TimerManager = {
       point.setAttribute("r", 5);
       point.setAttribute("fill", "rgb(234 179 8)");
 
+      // Create label with foreignObject for better text handling
+      const foreignObject = document.createElementNS(
+        svgNamespace,
+        "foreignObject"
+      );
+      const labelRadius = radius + 25;
+      const labelX = centerX + labelRadius * Math.cos(angle);
+      const labelY = centerY + labelRadius * Math.sin(angle);
+
+      const minutes = clock.hours * 60 + clock.minutes;
+      const timeText = `${Utils.padNumber(minutes)}:${Utils.padNumber(
+        clock.seconds
+      )}`;
+
+      // Calculate label width and height
+      const labelWidth = 20;
+      const labelHeight = 50;
+
+      // Position foreignObject
+      foreignObject.setAttribute("x", labelX - labelWidth / 2);
+      foreignObject.setAttribute("y", labelY - labelHeight / 2);
+      foreignObject.setAttribute("width", labelWidth);
+      foreignObject.setAttribute("height", labelHeight);
+
+      // Create div inside foreignObject for the text
+      const div = document.createElement("div");
+      div.classList.add("preset-point-label");
+      div.textContent = timeText;
+
+      foreignObject.appendChild(div);
+
+      // Add elements to SVG
       circle.parentNode.appendChild(point);
+      circle.parentNode.appendChild(foreignObject);
     });
   },
 
@@ -353,7 +405,9 @@ const TimerManager = {
           this.updateToggleButton(false);
 
           // Remove all preset points
-          const existingPoints = document.querySelectorAll(".preset-point");
+          const existingPoints = document.querySelectorAll(
+            ".preset-point, .preset-point-label"
+          );
           existingPoints.forEach((point) => point.remove());
 
           if (ELEMENTS.timer.presetSelect) {
