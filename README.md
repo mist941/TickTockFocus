@@ -1,8 +1,8 @@
-# Chronometer - Advanced Timer Extension
+# TickTockFocus - Advanced Timer Extension
 
-Chronometer is a powerful Chrome extension that helps you manage your time with customizable timer presets. Perfect for productivity techniques like Pomodoro, time-boxing, or any workflow that requires structured time management.
+TickTockFocus is a powerful Chrome extension that helps you manage your time with customizable timer presets. Perfect for productivity techniques like Pomodoro, time-boxing, or any workflow that requires structured time management.
 
-![Chronometer Extension](icons/chronometer.png)
+![TickTockFocus](icons/chronometer.png)
 
 ## Features
 
