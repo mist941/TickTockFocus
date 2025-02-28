@@ -538,14 +538,16 @@ const PresetFormManager = {
     try {
       const presetName = ELEMENTS.preset.inputs.name.value.trim();
       if (!presetName) {
-        throw new Error("Preset name is required");
+        console.error("Preset name is required");
+        return;
       }
 
       const clockItems = Array.from(
         ELEMENTS.preset.list.querySelectorAll(".preset-item")
       );
       if (clockItems.length === 0) {
-        throw new Error("Add at least one clock to the preset");
+        console.error("Add at least one clock to the preset");
+        return;
       }
 
       const clocks = clockItems.map((item, index) => {
