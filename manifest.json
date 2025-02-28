@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Simple Chrome Extension",
+  "name": "TickTockFocus - Advanced Timer",
   "version": "1.0",
-  "description": "This extension demonstrates a 'browser action' with a popup that changes the page color.",
+  "description": "Powerful time management tool with customizable multi-stage timer presets. Perfect for Pomodoro technique and structured workflows.",
   "action": {
     "default_popup": "popup/popup.html",
     "default_icon": "icons/chronometer.png"
