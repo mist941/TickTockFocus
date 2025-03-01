@@ -3,7 +3,7 @@
 Last Updated: 01.03.2025
 
 ## Introduction
-TickTockFocus ("we," "our," or "us") provides this Chrome Extension to help users manage their time with customizable timer presets. This Privacy Policy explains how we handle your information when you use our extension.
+Welcome to TickTockFocus. We respect your privacy and are committed to protecting your personal data. This privacy policy explains how we collect, use, and safeguard your information when you use our application.
 
 ## Information We Collect
 TickTockFocus does not collect, store, or share any personal data. The extension only uses local storage within your browser to save:
