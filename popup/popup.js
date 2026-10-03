@@ -95,6 +95,11 @@ const Utils = {
   getClocksDurationMs: (clocks) =>
     clocks.reduce((total, clock) => total + Utils.getSegmentDurationMs(clock), 0),
 
+  hasShortSegments: (clocks) =>
+    clocks.some(
+      (clock) => Utils.getSegmentDurationMs(clock) < CONFIG.MIN_SEGMENT_SECONDS * 1000
+    ),
+
   // HH:MM:SS, rounded up so a countdown only reads 00:00:00 once it has ended.
   formatDuration(milliseconds) {
     const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
@@ -741,6 +746,7 @@ const TimerManager = {
     }
 
     const selectedPresetId = ELEMENTS.timer.presetSelect.value;
+    const selectedPreset = this.presets.find((preset) => preset.id === selectedPresetId);
     if (this.presets.length === 0) {
       button.disabled = true;
       this.showTimerMessage("Create a preset on the Presets tab to start.");
@@ -752,6 +758,12 @@ const TimerManager = {
       this.showTimerMessage("This preset has no duration. Select another one.", {
         isError: true,
       });
+    } else if (Utils.hasShortSegments(selectedPreset.clocks)) {
+      // Presets saved by v1.0 can have segments shorter than the form allows now.
+      button.disabled = false;
+      this.showTimerMessage(
+        `Some segments are shorter than ${CONFIG.MIN_SEGMENT_SECONDS} seconds, so their notifications may arrive late.`
+      );
     } else {
       button.disabled = false;
       this.showTimerMessage("");
