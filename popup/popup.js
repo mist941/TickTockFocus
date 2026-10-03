@@ -402,6 +402,9 @@ const TimerManager = {
 
       if (this.presets.some((preset) => preset.id === selectedPresetId)) {
         presetSelect.value = selectedPresetId;
+      } else if (selectedPresetId) {
+        // The stored preset was deleted, possibly on another synced device.
+        await chrome.storage.local.remove("selectedPresetId");
       }
     } catch (error) {
       console.error("Error loading presets:", error);
@@ -585,10 +588,6 @@ const TimerManager = {
     }
 
     this.showIdleState();
-
-    if (ELEMENTS.timer.presetSelect) {
-      ELEMENTS.timer.presetSelect.value = "";
-    }
   },
 
   showIdleState() {
