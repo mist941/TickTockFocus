@@ -1,5 +1,6 @@
 const COUNTDOWN_ALARM = "countdown";
 const SEGMENT_ALARM_PREFIX = "clock_";
+const COMPLETION_GRACE_MS = 60_000;
 const RUN_STATE_RESET = {
   isRunning: false,
   endTime: null,
@@ -52,13 +53,24 @@ async function completeTimer() {
   await showNotification("Timer Complete", `Timer "${presetName}" completed!`);
 }
 
+// For a run past its end time whose countdown alarm hasn't fired. Soon after
+// the end the alarm is merely late; later than that it was lost (extension
+// update, browser restart), and "Timer Complete" would be stale.
+async function finishExpiredRun(run) {
+  if (Date.now() - run.endTime < COMPLETION_GRACE_MS) {
+    await completeTimer();
+  } else {
+    await stopTimer();
+  }
+}
+
 async function startTimer({ duration, presetName, clocks }) {
   // Alarms can fire late, so the previous run may have ended without its
-  // countdown alarm firing yet. Complete it first so restarting can't swallow
+  // countdown alarm firing yet. Finish it first so restarting can't swallow
   // its "Timer Complete" notification.
   const previousRun = await chrome.storage.local.get(["isRunning", "endTime"]);
   if (previousRun.isRunning && previousRun.endTime <= Date.now()) {
-    await completeTimer();
+    await finishExpiredRun(previousRun);
   }
 
   await clearTimerAlarms();
