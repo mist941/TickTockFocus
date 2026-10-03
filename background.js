@@ -5,6 +5,7 @@ const RUN_STATE_RESET = {
   endTime: null,
   totalDuration: null,
   presetName: null,
+  clocks: null,
 };
 
 // Message and alarm handlers run one at a time, so an alarm can't interleave
@@ -34,8 +35,19 @@ async function showNotification(title, message) {
   }
 }
 
+async function clearTimerAlarms() {
+  const alarms = await chrome.alarms.getAll();
+  const timerAlarms = alarms.filter(
+    (alarm) =>
+      alarm.name === COUNTDOWN_ALARM ||
+      alarm.name.startsWith(SEGMENT_ALARM_PREFIX)
+  );
+  await Promise.all(timerAlarms.map((alarm) => chrome.alarms.clear(alarm.name)));
+}
+
 async function completeTimer() {
   const { presetName } = await chrome.storage.local.get("presetName");
+  await clearTimerAlarms();
   await chrome.storage.local.set(RUN_STATE_RESET);
   await showNotification("Timer Complete", `Timer "${presetName}" completed!`);
 }
@@ -49,7 +61,7 @@ async function startTimer({ duration, presetName, clocks }) {
     await completeTimer();
   }
 
-  await chrome.alarms.clear(COUNTDOWN_ALARM);
+  await clearTimerAlarms();
 
   const startTime = Date.now();
   const endTime = startTime + duration;
@@ -74,15 +86,7 @@ async function startTimer({ duration, presetName, clocks }) {
 }
 
 async function stopTimer() {
-  await chrome.alarms.clear(COUNTDOWN_ALARM);
-
-  const { clocks } = await chrome.storage.local.get("clocks");
-  if (clocks) {
-    await Promise.all(
-      clocks.map((_, index) => chrome.alarms.clear(`${SEGMENT_ALARM_PREFIX}${index}`))
-    );
-  }
-
+  await clearTimerAlarms();
   await chrome.storage.local.set(RUN_STATE_RESET);
 }
 
