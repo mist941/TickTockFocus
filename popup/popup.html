@@ -29,6 +29,7 @@
             </div>
           </div>
           <div class="timer-controls">
+            <label for="preset_select" class="visually-hidden">Preset</label>
             <select id="preset_select" class="preset-select" aria-describedby="timer_message">
               <option value="">Select preset</option>
             </select>
@@ -43,23 +44,26 @@
           <form id="preset_form" class="preset-form">
             <div class="preset-container">
               <div class="form-field">
-                <input type="text" class="input" id="preset_name" placeholder="Preset name" required autocomplete="off" aria-describedby="preset_name_error">
+                <label for="preset_name" class="input-label">Preset name</label>
+                <input type="text" class="input" id="preset_name" placeholder="e.g. Pomodoro" required autocomplete="off" aria-describedby="preset_name_error">
                 <p id="preset_name_error" class="form-message error" aria-live="polite"></p>
               </div>
               <div class="form-field">
                 <div class="clock-settings">
-                  <div class="clock-input-container">
+                  <div class="clock-input-container" role="group" aria-label="Segment duration">
                     <div class="clock-input-wrapper">
                       <input type="number" class="input clock-input" id="preset_hours" placeholder="00" aria-describedby="segment_error">
-                      <p class="clock-input-label">H</p>
-                    </div>:
+                      <label for="preset_hours" class="clock-input-label"><span aria-hidden="true">H</span><span class="visually-hidden">Hours</span></label>
+                    </div>
+                    <span aria-hidden="true">:</span>
                     <div class="clock-input-wrapper">
                       <input type="number" class="input clock-input" id="preset_minutes" placeholder="00" aria-describedby="segment_error">
-                      <p class="clock-input-label">M</p>
-                    </div>:
+                      <label for="preset_minutes" class="clock-input-label"><span aria-hidden="true">M</span><span class="visually-hidden">Minutes</span></label>
+                    </div>
+                    <span aria-hidden="true">:</span>
                     <div class="clock-input-wrapper">
                       <input type="number" class="input clock-input" id="preset_seconds" placeholder="00" aria-describedby="segment_error">
-                      <p class="clock-input-label">S</p>
+                      <label for="preset_seconds" class="clock-input-label"><span aria-hidden="true">S</span><span class="visually-hidden">Seconds</span></label>
                     </div>
                   </div>
                   <button class="button" type="button" id="add_preset_clock">Add</button>

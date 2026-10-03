@@ -886,6 +886,19 @@ const PresetFormManager = {
     return presetItem;
   },
 
+  // Labels name the segment's position, so they change whenever the order does.
+  updateSegmentLabels() {
+    ELEMENTS.preset.list.querySelectorAll(".preset-item").forEach((item, index) => {
+      const { hours, minutes, seconds } = item.dataset;
+      const duration = [hours, minutes, seconds]
+        .map((value) => Utils.padNumber(value))
+        .join(":");
+      const removeButton = item.querySelector(".preset-remove-btn");
+      removeButton.setAttribute("aria-label", `Remove segment ${index + 1} (${duration})`);
+      removeButton.title = removeButton.getAttribute("aria-label");
+    });
+  },
+
   readSegmentInputs() {
     const { hours, minutes, seconds } = ELEMENTS.preset.inputs;
     return {
@@ -942,6 +955,7 @@ const PresetFormManager = {
 
     this.clearClocks();
     this.initializeDragAndDrop(presetItem);
+    this.updateSegmentLabels();
     this.showFieldError("segment", "");
     this.showFieldError("segments", "");
   },
@@ -949,7 +963,10 @@ const PresetFormManager = {
   initializeDragAndDrop(item) {
     const dragEvents = {
       dragstart: (e) => e.target.classList.add("dragging"),
-      dragend: (e) => e.target.classList.remove("dragging"),
+      dragend: (e) => {
+        e.target.classList.remove("dragging");
+        this.updateSegmentLabels();
+      },
     };
 
     Object.entries(dragEvents).forEach(([event, handler]) => {
@@ -957,7 +974,10 @@ const PresetFormManager = {
     });
 
     const removeBtn = item.querySelector(".preset-remove-btn");
-    removeBtn.addEventListener("click", () => item.remove());
+    removeBtn.addEventListener("click", () => {
+      item.remove();
+      this.updateSegmentLabels();
+    });
   },
 
   initializePresetsList() {
@@ -1028,7 +1048,8 @@ const PresetFormManager = {
         deleteButton.type = "button";
         deleteButton.className = "saved-preset-delete";
         deleteButton.textContent = "×";
-        deleteButton.title = "Delete preset";
+        deleteButton.setAttribute("aria-label", `Delete preset ${preset.name}`);
+        deleteButton.title = deleteButton.getAttribute("aria-label");
 
         deleteButton.addEventListener("click", () => {
           this.deletePreset(preset.id);

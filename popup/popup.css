@@ -228,18 +228,37 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .clock-input-wrapper {
-  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
 }
 
 .clock-input {
-  width: 40px;
+  width: 28px;
+  text-align: center;
 }
 
 .clock-input-label {
+  font-size: var(--font-size-sm);
+}
+
+.input-label {
+  font-size: var(--font-size-sm);
+  text-align: left;
+  margin-bottom: var(--spacing-xs);
+}
+
+/* Hidden visually but still read by screen readers */
+.visually-hidden {
   position: absolute;
-  right: var(--spacing-sm);
-  transform: translateY(-50%);
-  top: 50%;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Message styles */
