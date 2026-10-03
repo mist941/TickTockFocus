@@ -1,12 +1,18 @@
 // Constants for configuration
 const CONFIG = {
-  MAX_TIME_VALUE: 99,
   UPDATE_INTERVAL: 1000,
   DEFAULT_TIME_FORMAT: "24h",
   // In packed extensions Chrome fires alarms at most once every 30 seconds
   // and may delay them further (unpacked extensions are exempt). Each segment
   // ends with an alarm, so a shorter segment would be announced late.
   MIN_SEGMENT_SECONDS: 30,
+  // The only definition of the segment ranges: input clamping, validation and
+  // the inputs' min/max attributes (set on startup) all read it.
+  SEGMENT_FIELD_LIMITS: {
+    hours: { min: 0, max: 23, label: "Hours" },
+    minutes: { min: 0, max: 59, label: "Minutes" },
+    seconds: { min: 0, max: 59, label: "Seconds" },
+  },
   // Keeps every preset far below chrome.storage.sync's 8 KB per-item quota
   // (the worst case is about 3 KB).
   MAX_PRESET_NAME_LENGTH: 50,
@@ -70,13 +76,6 @@ const ELEMENTS = new Proxy(
 // Utility functions
 const Utils = {
   padNumber: (num, size = 2) => String(num).padStart(size, "0"),
-
-  validateTimeInput: (value) => {
-    const numValue = parseInt(value);
-    return (
-      !isNaN(numValue) && numValue >= 0 && numValue <= CONFIG.MAX_TIME_VALUE
-    );
-  },
 
   createElementWithClass: (tag, className) => {
     const element = document.createElement(tag);
@@ -804,15 +803,12 @@ const PresetFormManager = {
         return;
       }
 
-      const clocks = clockItems.map((item, index) => {
-        const timeItems = item.querySelectorAll(".preset-clock-item");
-        return {
-          position: index,
-          hours: parseInt(timeItems[0].textContent) || 0,
-          minutes: parseInt(timeItems[1].textContent) || 0,
-          seconds: parseInt(timeItems[2].textContent) || 0,
-        };
-      });
+      const clocks = clockItems.map((item, index) => ({
+        position: index,
+        hours: Number(item.dataset.hours),
+        minutes: Number(item.dataset.minutes),
+        seconds: Number(item.dataset.seconds),
+      }));
 
       const preset = {
         id: Utils.generateUUID(),
@@ -832,37 +828,28 @@ const PresetFormManager = {
     }
   },
 
-  validatePreset(preset) {
-    return (
-      preset.name &&
-      Utils.validateTimeInput(preset.hours) &&
-      Utils.validateTimeInput(preset.minutes) &&
-      Utils.validateTimeInput(preset.seconds)
-    );
-  },
-
-  limitInputLength(input) {
-    input.value = input.value.replace(/[^\d]/g, "");
-
-    if (input.value.length > 2) {
-      input.value.slice(0, 2);
-    }
-
-    const numValue = parseInt(input.value);
-    if (numValue > CONFIG.MAX_TIME_VALUE) {
-      input.value = String(CONFIG.MAX_TIME_VALUE);
-    }
+  limitInputLength(input, field) {
+    const digits = input.value.replace(/\D/g, "").slice(0, 2);
+    const { max } = CONFIG.SEGMENT_FIELD_LIMITS[field];
+    input.value = digits === "" ? "" : String(Math.min(Number(digits), max));
   },
 
   createPresetItem(hours, minutes, seconds) {
     const presetItem = Utils.createElementWithClass("div", "preset-item");
     presetItem.draggable = true;
-    presetItem.innerHTML = `
-      <div class="preset-clock-item">${Utils.padNumber(hours)}</div>:
-      <div class="preset-clock-item">${Utils.padNumber(minutes)}</div>:
-      <div class="preset-clock-item">${Utils.padNumber(seconds)}</div>
-      <button class="preset-remove-btn">×</button>
-    `;
+    Object.assign(presetItem.dataset, { hours, minutes, seconds });
+
+    [hours, minutes, seconds].forEach((value, index) => {
+      if (index > 0) presetItem.append(":");
+      const timeItem = Utils.createElementWithClass("div", "preset-clock-item");
+      timeItem.textContent = Utils.padNumber(value);
+      presetItem.append(timeItem);
+    });
+
+    const removeButton = Utils.createElementWithClass("button", "preset-remove-btn");
+    removeButton.type = "button";
+    removeButton.textContent = "×";
+    presetItem.append(removeButton);
     return presetItem;
   },
 
@@ -875,7 +862,17 @@ const PresetFormManager = {
     };
   },
 
-  validateSegment({ hours, minutes, seconds }) {
+  validateSegment(segment) {
+    for (const [field, { min, max, label }] of Object.entries(
+      CONFIG.SEGMENT_FIELD_LIMITS
+    )) {
+      const value = segment[field];
+      if (!Number.isInteger(value) || value < min || value > max) {
+        return `${label} must be between ${min} and ${max}.`;
+      }
+    }
+
+    const { hours, minutes, seconds } = segment;
     const totalSeconds = hours * 3600 + minutes * 60 + seconds;
     if (totalSeconds === 0) {
       return "Enter a duration longer than 00:00:00.";
@@ -954,21 +951,20 @@ const PresetFormManager = {
       this.showFieldError("name", "")
     );
 
-    const clockInputs = [
-      ELEMENTS.preset.inputs.hours,
-      ELEMENTS.preset.inputs.minutes,
-      ELEMENTS.preset.inputs.seconds,
-    ];
-
-    clockInputs.forEach((input) => {
+    Object.entries(CONFIG.SEGMENT_FIELD_LIMITS).forEach(([field, { min, max }]) => {
+      const input = ELEMENTS.preset.inputs[field];
       if (!input) return;
 
+      input.min = String(min);
+      input.max = String(max);
+
+      // Number inputs accept these, but they would blank the value.
       input.addEventListener("keypress", (e) => {
-        if ([".", ","].includes(e.key)) e.preventDefault();
+        if ([".", ",", "e", "E", "+", "-"].includes(e.key)) e.preventDefault();
       });
 
       input.addEventListener("input", () => {
-        this.limitInputLength(input);
+        this.limitInputLength(input, field);
         this.showFieldError("segment", "");
       });
     });
@@ -991,8 +987,9 @@ const PresetFormManager = {
         nameSpan.textContent = preset.name;
 
         const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
         deleteButton.className = "saved-preset-delete";
-        deleteButton.innerHTML = "×";
+        deleteButton.textContent = "×";
         deleteButton.title = "Delete preset";
 
         deleteButton.addEventListener("click", () => {
