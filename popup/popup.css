@@ -12,6 +12,7 @@
   --color-text-secondary: #ccc;
   --color-text-light: #fff;
   --color-text-danger: #ff4444;
+  --color-text-error: #ff6b6b;
 
   /* Border colors */
   --color-border-primary: rgb(52 52 56);
@@ -225,6 +226,17 @@ input[type="number"]::-webkit-inner-spin-button {
   right: var(--spacing-sm);
   transform: translateY(-50%);
   top: 50%;
+}
+
+/* Message styles */
+.form-message {
+  color: var(--color-text-error);
+  font-size: var(--font-size-sm);
+  margin: var(--spacing-sm) 0;
+
+  &:empty {
+    margin: 0;
+  }
 }
 
 /* Button group styles */

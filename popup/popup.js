@@ -3,9 +3,15 @@ const CONFIG = {
   MAX_TIME_VALUE: 99,
   UPDATE_INTERVAL: 1000,
   DEFAULT_TIME_FORMAT: "24h",
+  // Keeps every preset far below chrome.storage.sync's 8 KB per-item quota
+  // (the worst case is about 3 KB).
+  MAX_PRESET_NAME_LENGTH: 50,
+  MAX_SEGMENTS_PER_PRESET: 50,
   STORAGE_KEYS: {
     SETTINGS: "settings",
-    PRESETS: "presets",
+    PRESET_PREFIX: "preset_",
+    LEGACY_PRESETS: "presets",
+    LEGACY_SETTINGS: "settings",
     END_TIME: "endTime",
   },
 };
@@ -33,6 +39,7 @@ const ELEMENTS = new Proxy(
         seconds: document.getElementById("preset_seconds"),
       },
       list: document.querySelector(".clock-presets-list"),
+      message: document.getElementById("presets_message"),
     },
     tabs: {
       list: document.querySelectorAll(".tab"),
@@ -79,45 +86,180 @@ const Utils = {
   },
 };
 
-// Local Storage Operations with error handling
+// Presets and settings live in chrome.storage.sync so they follow the user's
+// Google account. A write that hits a sync quota falls back to
+// chrome.storage.local, so every read merges both areas.
 const Storage = {
-  get(key) {
+  isQuotaError(error) {
+    return /quota/i.test(error?.message || "");
+  },
+
+  presetKey(presetId) {
+    return `${CONFIG.STORAGE_KEYS.PRESET_PREFIX}${presetId}`;
+  },
+
+  async getItems(keys) {
+    const [syncItems, localItems] = await Promise.all([
+      chrome.storage.sync.get(keys),
+      chrome.storage.local.get(keys),
+    ]);
+    return { ...syncItems, ...localItems };
+  },
+
+  async setItems(items) {
     try {
-      const data = localStorage.getItem(key);
-      return data ? JSON.parse(data) : null;
+      await chrome.storage.sync.set(items);
     } catch (error) {
-      console.error(`Error reading ${key}:`, error);
-      return null;
+      if (!this.isQuotaError(error)) throw error;
+
+      const entries = Object.entries(items);
+      if (entries.length === 1) {
+        await chrome.storage.local.set(items);
+        return;
+      }
+      // Retry one by one so only the items that don't fit stay local-only.
+      for (const [key, value] of entries) {
+        await this.setItems({ [key]: value });
+      }
+      return;
     }
+    // A local copy left by an earlier fallback would shadow the synced value.
+    await chrome.storage.local.remove(Object.keys(items));
   },
 
-  set(key, value) {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-      return true;
-    } catch (error) {
-      console.error(`Error saving ${key}:`, error);
-      return false;
-    }
+  async getSettings() {
+    const items = await this.getItems(CONFIG.STORAGE_KEYS.SETTINGS);
+    return items[CONFIG.STORAGE_KEYS.SETTINGS] || {};
   },
 
-  getSettings() {
-    return this.get(CONFIG.STORAGE_KEYS.SETTINGS) || {};
-  },
-
-  setSettings(key, value) {
-    const settings = this.getSettings();
+  async setSettings(key, value) {
+    const settings = await this.getSettings();
     settings[key] = value;
-    return this.set(CONFIG.STORAGE_KEYS.SETTINGS, settings);
+    await this.setItems({ [CONFIG.STORAGE_KEYS.SETTINGS]: settings });
   },
 
-  getPresets() {
-    return this.get(CONFIG.STORAGE_KEYS.PRESETS) || [];
+  async getPresets() {
+    const items = await this.getItems(null);
+    return Object.entries(items)
+      .filter(([key]) => key.startsWith(CONFIG.STORAGE_KEYS.PRESET_PREFIX))
+      .map(([, preset]) => preset)
+      .sort((first, second) => (first.createdAt || 0) - (second.createdAt || 0));
   },
 
   async savePreset(preset) {
-    const presets = this.getPresets();
-    return this.set(CONFIG.STORAGE_KEYS.PRESETS, [...presets, preset]);
+    await this.setItems({ [this.presetKey(preset.id)]: preset });
+  },
+
+  async deletePreset(presetId) {
+    const key = this.presetKey(presetId);
+    await Promise.all([
+      chrome.storage.sync.remove(key),
+      chrome.storage.local.remove(key),
+    ]);
+  },
+};
+
+// One-time move of v1.0 data from the popup's localStorage to chrome.storage.
+// The old keys are removed only after the copies read back intact, so a run
+// that fails or is interrupted loses nothing and retries on the next open.
+const LegacyMigration = {
+  readLegacyKey(key) {
+    const rawValue = localStorage.getItem(key);
+    if (rawValue === null) return { exists: false };
+    try {
+      return { exists: true, isReadable: true, value: JSON.parse(rawValue) };
+    } catch (error) {
+      return { exists: true, isReadable: false };
+    }
+  },
+
+  isPresetLike(preset) {
+    return (
+      preset !== null &&
+      typeof preset === "object" &&
+      Array.isArray(preset.clocks)
+    );
+  },
+
+  // Storage may hand objects back with their keys in a different order.
+  toComparableJson(value) {
+    return JSON.stringify(value, (key, nestedValue) =>
+      nestedValue && typeof nestedValue === "object" && !Array.isArray(nestedValue)
+        ? Object.fromEntries(
+            Object.entries(nestedValue).sort(([first], [second]) =>
+              first < second ? -1 : first > second ? 1 : 0
+            )
+          )
+        : nestedValue
+    );
+  },
+
+  collectPresets(legacyPresets, itemsToWrite) {
+    const presets = legacyPresets.value ?? [];
+    if (!Array.isArray(presets) || !presets.every(this.isPresetLike)) {
+      return false;
+    }
+
+    const usedIds = new Set();
+    presets.forEach((preset, index) => {
+      // Presets are stored by id, so a missing or repeated id would lose one.
+      // The replacement depends only on the data, so a retried run reuses it.
+      if (typeof preset.id !== "string" || usedIds.has(preset.id)) {
+        preset.id = `${typeof preset.id === "string" ? preset.id : "legacy"}-${index}`;
+      }
+      usedIds.add(preset.id);
+      itemsToWrite[Storage.presetKey(preset.id)] = preset;
+    });
+    return true;
+  },
+
+  async collectSettings(legacySettings, itemsToWrite) {
+    const settings = legacySettings.value;
+    if (settings !== null && (typeof settings !== "object" || Array.isArray(settings))) {
+      return false;
+    }
+
+    const settingsKey = CONFIG.STORAGE_KEYS.SETTINGS;
+    const storedItems = await Storage.getItems(settingsKey);
+    // Settings that already arrived through sync win over this device's old copy.
+    if (settings && !storedItems[settingsKey]) {
+      itemsToWrite[settingsKey] = settings;
+    }
+    return true;
+  },
+
+  async run() {
+    const { LEGACY_PRESETS, LEGACY_SETTINGS } = CONFIG.STORAGE_KEYS;
+    const legacyPresets = this.readLegacyKey(LEGACY_PRESETS);
+    const legacySettings = this.readLegacyKey(LEGACY_SETTINGS);
+    const itemsToWrite = {};
+    const legacyKeysToRemove = [];
+
+    // Values v1.0 itself couldn't have read are left where they are.
+    if (legacyPresets.isReadable && this.collectPresets(legacyPresets, itemsToWrite)) {
+      legacyKeysToRemove.push(LEGACY_PRESETS);
+    }
+    if (
+      legacySettings.isReadable &&
+      (await this.collectSettings(legacySettings, itemsToWrite))
+    ) {
+      legacyKeysToRemove.push(LEGACY_SETTINGS);
+    }
+    if (legacyKeysToRemove.length === 0) return;
+
+    const keysToVerify = Object.keys(itemsToWrite);
+    if (keysToVerify.length > 0) {
+      await Storage.setItems(itemsToWrite);
+      const storedItems = await Storage.getItems(keysToVerify);
+      const isIntact = keysToVerify.every(
+        (key) =>
+          this.toComparableJson(storedItems[key]) ===
+          this.toComparableJson(itemsToWrite[key])
+      );
+      if (!isIntact) throw new Error("Migrated data did not read back intact");
+    }
+
+    legacyKeysToRemove.forEach((key) => localStorage.removeItem(key));
   },
 };
 
@@ -159,6 +301,8 @@ const TabManager = {
 
 // Clock Management with time handling
 const ClockManager = {
+  timeFormat: CONFIG.DEFAULT_TIME_FORMAT,
+
   formatTime(hours, minutes, format) {
     const formattedHours = format === "12h" ? hours % 12 || 12 : hours;
     const amPm = format === "12h" ? (hours >= 12 ? "PM" : "AM") : "";
@@ -170,27 +314,33 @@ const ClockManager = {
   updateClock() {
     try {
       const now = new Date();
-      const settings = Storage.getSettings();
-      const timeFormat = settings.timeFormat || CONFIG.DEFAULT_TIME_FORMAT;
-
       ELEMENTS.timer.clock.textContent = this.formatTime(
         now.getHours(),
         now.getMinutes(),
-        timeFormat
+        this.timeFormat
       );
     } catch (error) {
       console.error("Error updating clock:", error);
     }
   },
 
-  toggleTimeFormat() {
-    const settings = Storage.getSettings();
-    const newFormat = settings.timeFormat === "12h" ? "24h" : "12h";
-    Storage.setSettings("timeFormat", newFormat);
+  async toggleTimeFormat() {
+    this.timeFormat = this.timeFormat === "12h" ? "24h" : "12h";
     this.updateClock();
+    try {
+      await Storage.setSettings("timeFormat", this.timeFormat);
+    } catch (error) {
+      console.error("Error saving time format:", error);
+    }
   },
 
-  startClockUpdate() {
+  async startClockUpdate() {
+    try {
+      const settings = await Storage.getSettings();
+      this.timeFormat = settings.timeFormat || CONFIG.DEFAULT_TIME_FORMAT;
+    } catch (error) {
+      console.error("Error loading settings:", error);
+    }
     this.updateClock();
     setInterval(() => this.updateClock(), CONFIG.UPDATE_INTERVAL);
   },
@@ -201,11 +351,11 @@ const TimerManager = {
   timer: null,
   endTime: null,
   totalDuration: null,
+  presets: [],
 
   getPresetDuration(presetId) {
     try {
-      const presets = Storage.getPresets();
-      const preset = presets.find((p) => p.id === presetId);
+      const preset = this.presets.find((p) => p.id === presetId);
 
       if (!preset) return null;
 
@@ -222,14 +372,14 @@ const TimerManager = {
     }
   },
 
-  loadPresets() {
+  async loadPresets() {
     try {
-      const presets = Storage.getPresets();
+      this.presets = await Storage.getPresets();
       const presetSelect = ELEMENTS.timer.presetSelect;
 
       presetSelect.innerHTML = '<option value="">Select preset</option>';
 
-      presets.forEach((preset) => {
+      this.presets.forEach((preset) => {
         const option = document.createElement("option");
         option.value = preset.id;
         option.textContent = preset.name;
@@ -284,8 +434,7 @@ const TimerManager = {
 
   startTimer(duration) {
     const selectedPresetId = ELEMENTS.timer.presetSelect.value;
-    const presets = Storage.getPresets();
-    const preset = presets.find((p) => p.id === selectedPresetId);
+    const preset = this.presets.find((p) => p.id === selectedPresetId);
 
     if (!preset) return;
 
@@ -510,6 +659,10 @@ const TimerManager = {
 
 // Preset Form Management with improved validation and error handling
 const PresetFormManager = {
+  showMessage(text) {
+    ELEMENTS.preset.message.textContent = text;
+  },
+
   clearClocksList() {
     ELEMENTS.preset.list.innerHTML = "";
   },
@@ -538,11 +691,15 @@ const PresetFormManager = {
     this.clearForm();
   },
 
-  savePreset() {
+  async savePreset() {
     try {
       const presetName = ELEMENTS.preset.inputs.name.value.trim();
       if (!presetName) {
         console.error("Preset name is required");
+        return;
+      }
+      if (presetName.length > CONFIG.MAX_PRESET_NAME_LENGTH) {
+        console.error("Preset name is too long");
         return;
       }
 
@@ -571,12 +728,14 @@ const PresetFormManager = {
         createdAt: Date.now(),
       };
 
-      Storage.savePreset(preset);
+      await Storage.savePreset(preset);
+      this.showMessage("");
       this.hideForm();
-      this.loadSavedPresets();
-      TimerManager.loadPresets();
+      await this.loadSavedPresets();
+      await TimerManager.loadPresets();
     } catch (error) {
       console.error("Error saving preset:", error);
+      this.showMessage("Couldn't save the preset. Try again.");
     }
   },
 
@@ -615,6 +774,12 @@ const PresetFormManager = {
   },
 
   addClockToPresetsList() {
+    const segmentCount = ELEMENTS.preset.list.querySelectorAll(".preset-item").length;
+    if (segmentCount >= CONFIG.MAX_SEGMENTS_PER_PRESET) {
+      console.error("Preset has the maximum number of segments");
+      return;
+    }
+
     const hours = ELEMENTS.preset.inputs.hours.value || "0";
     const minutes = ELEMENTS.preset.inputs.minutes.value || "0";
     const seconds = ELEMENTS.preset.inputs.seconds.value || "0";
@@ -659,6 +824,8 @@ const PresetFormManager = {
   },
 
   initializeInputLimits() {
+    ELEMENTS.preset.inputs.name.maxLength = CONFIG.MAX_PRESET_NAME_LENGTH;
+
     const clockInputs = [
       ELEMENTS.preset.inputs.hours,
       ELEMENTS.preset.inputs.minutes,
@@ -676,10 +843,10 @@ const PresetFormManager = {
     });
   },
 
-  loadSavedPresets() {
+  async loadSavedPresets() {
     try {
       const presetsList = document.querySelector(".saved-presets-list");
-      const presets = Storage.getPresets();
+      const presets = await Storage.getPresets();
 
       presetsList.innerHTML = "";
 
@@ -707,18 +874,19 @@ const PresetFormManager = {
       });
     } catch (error) {
       console.error("Error loading saved presets:", error);
+      this.showMessage("Couldn't load your presets. Reopen the popup to try again.");
     }
   },
 
-  deletePreset(presetId) {
+  async deletePreset(presetId) {
     try {
-      const presets = Storage.getPresets();
-      const updatedPresets = presets.filter((p) => p.id !== presetId);
-      Storage.set(CONFIG.STORAGE_KEYS.PRESETS, updatedPresets);
-      this.loadSavedPresets();
-      TimerManager.loadPresets();
+      await Storage.deletePreset(presetId);
+      this.showMessage("");
+      await this.loadSavedPresets();
+      await TimerManager.loadPresets();
     } catch (error) {
       console.error("Error deleting preset:", error);
+      this.showMessage("Couldn't delete the preset. Try again.");
     }
   },
 
@@ -731,17 +899,13 @@ const PresetFormManager = {
     }
 
     this.initializePresetsList();
-    this.loadSavedPresets();
   },
 };
 
 // Initialize Application with error handling
-const initializeApp = () => {
+const initializeApp = async () => {
   try {
     TabManager.initializeTabs();
-    ClockManager.startClockUpdate();
-    TimerManager.loadPresets();
-    TimerManager.restoreSelectedPreset();
     TimerManager.restoreTimerState();
 
     // Toggle time format
@@ -772,6 +936,21 @@ const initializeApp = () => {
 
     PresetFormManager.initializeInputLimits();
     PresetFormManager.initializeEventListeners();
+
+    // Presets and settings have to be in chrome.storage before anything reads them.
+    try {
+      await LegacyMigration.run();
+    } catch (error) {
+      console.error("Error migrating presets from localStorage:", error);
+      PresetFormManager.showMessage(
+        "Couldn't move your presets from the previous version. They're still on this device; reopen the popup to try again."
+      );
+    }
+
+    await ClockManager.startClockUpdate();
+    await PresetFormManager.loadSavedPresets();
+    await TimerManager.loadPresets();
+    TimerManager.restoreSelectedPreset();
   } catch (error) {
     console.error("Error initializing app:", error);
   }

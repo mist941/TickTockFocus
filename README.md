@@ -25,6 +25,7 @@ TickTockFocus is a powerful Chrome extension that helps you manage your time wit
 - Create unlimited timer presets for different activities
 - Easily reorder clock segments with drag-and-drop functionality
 - Toggle between 12-hour and 24-hour time formats
+- Presets and settings sync across your computers through your Google account when Chrome Sync is on
 
 ### 💾 Persistent Timer State
 - Timers continue running even if you close the popup
