@@ -25,6 +25,9 @@ const CONFIG = {
   // (the worst case is about 3 KB).
   MAX_PRESET_NAME_LENGTH: 50,
   MAX_SEGMENTS_PER_PRESET: 50,
+  // Sync writes are rate-limited, so each popup open moves at most this many
+  // local-only items back to sync.
+  MAX_SYNC_RETRIES_PER_OPEN: 10,
   STORAGE_KEYS: {
     SETTINGS: "settings",
     PRESET_PREFIX: "preset_",
@@ -141,6 +144,11 @@ const Storage = {
     return /quota/i.test(error?.message || "");
   },
 
+  // Unlike the size quotas, these limits pass after a while.
+  isWriteRateError(error) {
+    return /MAX_WRITE_OPERATIONS_PER_(MINUTE|HOUR)/.test(error?.message || "");
+  },
+
   presetKey(presetId) {
     return `${CONFIG.STORAGE_KEYS.PRESET_PREFIX}${presetId}`;
   },
@@ -172,6 +180,31 @@ const Storage = {
     }
     // A local copy left by an earlier fallback would shadow the synced value.
     await chrome.storage.local.remove(Object.keys(items));
+  },
+
+  // Items that fell back to local would otherwise never sync. A write-rate
+  // error ends this attempt until the next open; an item over a size quota
+  // stays local, which is expected.
+  async retryLocalOnlyItems() {
+    const localItems = await chrome.storage.local.get(null);
+    const keysToRetry = Object.keys(localItems)
+      .filter(
+        (key) =>
+          key.startsWith(CONFIG.STORAGE_KEYS.PRESET_PREFIX) ||
+          key === CONFIG.STORAGE_KEYS.SETTINGS
+      )
+      .slice(0, CONFIG.MAX_SYNC_RETRIES_PER_OPEN);
+
+    for (const key of keysToRetry) {
+      try {
+        await chrome.storage.sync.set({ [key]: localItems[key] });
+      } catch (error) {
+        if (this.isWriteRateError(error)) return;
+        if (this.isQuotaError(error)) continue;
+        throw error;
+      }
+      await chrome.storage.local.remove(key);
+    }
   },
 
   async getSettings() {
@@ -1230,6 +1263,12 @@ const initializeApp = async () => {
       PresetFormManager.showMessage(
         "Couldn't move your presets from the previous version. They're still on this device; reopen the popup to try again."
       );
+    }
+
+    try {
+      await Storage.retryLocalOnlyItems();
+    } catch (error) {
+      console.error("Error moving local-only items to sync:", error);
     }
 
     await ClockManager.startClockUpdate();
