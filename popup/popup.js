@@ -13,6 +13,14 @@ const CONFIG = {
     minutes: { min: 0, max: 59, label: "Minutes" },
     seconds: { min: 0, max: 59, label: "Seconds" },
   },
+  // Ring marker labels: distance outside the ring, and an upper bound for one
+  // 11px digit's width and the line height, used to keep labels from overlapping.
+  POINT_LABEL: {
+    OFFSET: 16,
+    CHARACTER_WIDTH: 6.2,
+    HEIGHT: 13,
+    GAP: 2,
+  },
   // Keeps every preset far below chrome.storage.sync's 8 KB per-item quota
   // (the worst case is about 3 KB).
   MAX_PRESET_NAME_LENGTH: 50,
@@ -35,6 +43,7 @@ const ELEMENTS = new Proxy(
       clock: document.getElementById("clock"),
       presetSelect: document.getElementById("preset_select"),
       progressBar: document.querySelector(".timer-progress-bar"),
+      presetPoints: document.querySelector(".preset-points"),
       message: document.getElementById("timer_message"),
     },
     preset: {
@@ -76,6 +85,29 @@ const ELEMENTS = new Proxy(
 // Utility functions
 const Utils = {
   padNumber: (num, size = 2) => String(num).padStart(size, "0"),
+
+  // background.js computes segment durations the same way; keep them in agreement.
+  getSegmentDurationMs: (clock) =>
+    ((clock.hours || 0) * 3600 + (clock.minutes || 0) * 60 + (clock.seconds || 0)) *
+    1000,
+
+  getClocksDurationMs: (clocks) =>
+    clocks.reduce((total, clock) => total + Utils.getSegmentDurationMs(clock), 0),
+
+  // HH:MM:SS, rounded up so a countdown only reads 00:00:00 once it has ended.
+  formatDuration(milliseconds) {
+    const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return [hours, minutes, seconds].map((value) => Utils.padNumber(value)).join(":");
+  },
+
+  boxesOverlap: (first, second) =>
+    first.left < second.right &&
+    second.left < first.right &&
+    first.top < second.bottom &&
+    second.top < first.bottom,
 
   createElementWithClass: (tag, className) => {
     const element = document.createElement(tag);
@@ -379,13 +411,7 @@ const TimerManager = {
 
       if (!preset) return null;
 
-      // Calculate total milliseconds from all clocks in the preset
-      return preset.clocks.reduce((total, clock) => {
-        const hours = (clock.hours || 0) * 60 * 60 * 1000;
-        const minutes = (clock.minutes || 0) * 60 * 1000;
-        const seconds = (clock.seconds || 0) * 1000;
-        return total + hours + minutes + seconds;
-      }, 0);
+      return Utils.getClocksDurationMs(preset.clocks);
     } catch (error) {
       console.error("Error calculating preset duration:", error);
       return null;
@@ -491,92 +517,87 @@ const TimerManager = {
     this.startCountdownUpdate();
   },
 
-  drawPresetPoints(clocks) {
-    const circle = ELEMENTS.timer.progressBar;
-    if (!circle) return;
-
-    const svgNamespace = "http://www.w3.org/2000/svg";
-    const centerX = circle.cx.baseVal.value;
-    const centerY = circle.cy.baseVal.value;
-    const radius = circle.r.baseVal.value;
-
-    // Clear existing points and labels
-    const existingElements = document.querySelectorAll(
-      ".preset-point, .preset-point-label"
+  createSvgElement(tag, attributes) {
+    const element = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    Object.entries(attributes).forEach(([name, value]) =>
+      element.setAttribute(name, value)
     );
-    existingElements.forEach((element) => element.remove());
+    return element;
+  },
 
-    // Calculate total duration
-    const totalDuration = clocks.reduce((total, clock) => {
-      const clockMs =
-        (clock.hours * 3600 + clock.minutes * 60 + clock.seconds) * 1000;
-      return total + clockMs;
-    }, 0);
+  clearPresetPoints() {
+    ELEMENTS.timer.presetPoints.replaceChildren();
+  },
 
+  // Places a label outside the ring, anchored on the side facing away from it.
+  layoutPointLabel(text, angle, center, radius) {
+    const { OFFSET, CHARACTER_WIDTH, HEIGHT, GAP } = CONFIG.POINT_LABEL;
+    const x = center.x + (radius + OFFSET) * Math.sin(angle);
+    const y = center.y - (radius + OFFSET) * Math.cos(angle);
+    const horizontalDirection = Math.sin(angle);
+    let anchor = "middle";
+    if (horizontalDirection > 0.3) anchor = "start";
+    if (horizontalDirection < -0.3) anchor = "end";
+
+    // Estimated rather than measured, so it also works while the tab is hidden.
+    const width = text.length * CHARACTER_WIDTH;
+    const anchorShift = { start: 0, middle: width / 2, end: width }[anchor];
+    const box = {
+      left: x - anchorShift - GAP,
+      right: x - anchorShift + width + GAP,
+      top: y - HEIGHT / 2 - GAP,
+      bottom: y + HEIGHT / 2 + GAP,
+    };
+
+    const element = this.createSvgElement("text", {
+      class: "preset-point-label",
+      x,
+      y,
+      "text-anchor": anchor,
+    });
+    element.textContent = text;
+    return { element, box };
+  },
+
+  drawPresetPoints(clocks) {
+    this.clearPresetPoints();
+    const circle = ELEMENTS.timer.progressBar;
+    const center = { x: circle.cx.baseVal.value, y: circle.cy.baseVal.value };
+    const radius = circle.r.baseVal.value;
+    const totalDuration = Utils.getClocksDurationMs(clocks);
+    if (totalDuration <= 0) return;
+
+    const placedLabelBoxes = [];
     let accumulatedTime = 0;
 
     clocks.forEach((clock) => {
-      // Add current clock duration to accumulated time
-      const clockMs =
-        (clock.hours * 3600 + clock.minutes * 60 + clock.seconds) * 1000;
-      accumulatedTime += clockMs;
+      accumulatedTime += Utils.getSegmentDurationMs(clock);
+      // The last segment ends where the ring starts, so it gets no marker.
+      if (accumulatedTime >= totalDuration) return;
 
-      // Calculate position based on accumulated time
-      const position = accumulatedTime / totalDuration;
-
-      // Calculate angle (start from top and go clockwise)
-      const angle = -position * 2 * Math.PI;
-
-      // Create point
-      const point = document.createElementNS(svgNamespace, "circle");
-      const pointX = centerX + radius * Math.cos(angle);
-      const pointY = centerY + radius * Math.sin(angle);
-
-      point.setAttribute("class", "preset-point");
-      point.setAttribute("cx", pointX);
-      point.setAttribute("cy", pointY);
-      point.setAttribute("r", 5);
-      point.setAttribute("fill", "rgb(234 179 8)");
-
-      // Create label with foreignObject for better text handling
-      const foreignObject = document.createElementNS(
-        svgNamespace,
-        "foreignObject"
+      // Clockwise from 12 o'clock: where the arc's edge is when this segment ends.
+      const angle = (accumulatedTime / totalDuration) * 2 * Math.PI;
+      ELEMENTS.timer.presetPoints.append(
+        this.createSvgElement("circle", {
+          class: "preset-point",
+          cx: center.x + radius * Math.sin(angle),
+          cy: center.y - radius * Math.cos(angle),
+          r: 5,
+        })
       );
-      const labelRadius = radius + 25;
-      const labelX = centerX + labelRadius * Math.cos(angle);
-      const labelY = centerY + labelRadius * Math.sin(angle);
 
-      // Calculate accumulated hours, minutes and seconds for the label
-      const totalHours = Math.floor(accumulatedTime / (1000 * 60 * 60));
-      const totalMinutes = Math.floor(
-        (accumulatedTime % (1000 * 60 * 60)) / (1000 * 60)
+      const label = this.layoutPointLabel(
+        Utils.formatDuration(accumulatedTime),
+        angle,
+        center,
+        radius
       );
-      const totalSeconds = Math.floor((accumulatedTime % (1000 * 60)) / 1000);
-      const timeText = `${Utils.padNumber(totalHours)}:${Utils.padNumber(
-        totalMinutes
-      )}:${Utils.padNumber(totalSeconds)}`;
-
-      // Calculate label width and height
-      const labelWidth = 20;
-      const labelHeight = 60;
-
-      // Position foreignObject
-      foreignObject.setAttribute("x", labelX - labelWidth / 2);
-      foreignObject.setAttribute("y", labelY - labelHeight / 2);
-      foreignObject.setAttribute("width", labelWidth);
-      foreignObject.setAttribute("height", labelHeight);
-
-      // Create div inside foreignObject for the text
-      const div = document.createElement("div");
-      div.classList.add("preset-point-label");
-      div.textContent = timeText;
-
-      foreignObject.appendChild(div);
-
-      // Add elements to SVG
-      circle.parentNode.appendChild(point);
-      circle.parentNode.appendChild(foreignObject);
+      // On short stages the marker stays but a label that would overlap is skipped.
+      if (placedLabelBoxes.some((box) => Utils.boxesOverlap(box, label.box))) {
+        return;
+      }
+      placedLabelBoxes.push(label.box);
+      ELEMENTS.timer.presetPoints.append(label.element);
     });
   },
 
@@ -593,15 +614,10 @@ const TimerManager = {
 
   showIdleState() {
     this.stopCountdownUpdate();
-    ELEMENTS.timer.countdownDisplay.textContent = "00:00";
+    ELEMENTS.timer.countdownDisplay.textContent = Utils.formatDuration(0);
     this.updateCircleProgress(0);
     this.updateToggleButton(false);
-
-    // Remove all preset points
-    const existingPoints = document.querySelectorAll(
-      ".preset-point, .preset-point-label"
-    );
-    existingPoints.forEach((point) => point.remove());
+    this.clearPresetPoints();
   },
 
   startCountdownUpdate() {
@@ -631,31 +647,27 @@ const TimerManager = {
           return;
         }
 
-        const hours = Math.floor(timeLeft / (1000 * 60 * 60));
-        const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
-
-        ELEMENTS.timer.countdownDisplay.textContent = `${Utils.padNumber(
-          hours
-        )}:${Utils.padNumber(minutes)}:${Utils.padNumber(seconds)}`;
-
-        const progress = (timeLeft / result.totalDuration) * 100;
-
-        this.updateCircleProgress(progress);
+        ELEMENTS.timer.countdownDisplay.textContent = Utils.formatDuration(timeLeft);
+        this.updateCircleProgress(timeLeft / result.totalDuration);
       }
     );
   },
 
-  updateCircleProgress(percentage) {
+  updateCircleProgress(remainingFraction) {
     const circle = ELEMENTS.timer.progressBar;
     if (!circle) return;
 
-    const radius = circle.r.baseVal.value;
-    const circumference = radius * 2 * Math.PI;
-    const offset = circumference - (percentage / 100) * circumference;
-
+    const circumference = 2 * Math.PI * circle.r.baseVal.value;
+    const isEmpty = remainingFraction <= 0;
+    circle.classList.toggle("is-empty", isEmpty);
     circle.style.strokeDasharray = `${circumference} ${circumference}`;
-    circle.style.strokeDashoffset = offset;
+    // The path starts at 12 o'clock and runs clockwise. A negative offset hides
+    // the elapsed part, so the remaining arc is used up clockwise. An empty
+    // ring is hidden (a round cap would leave a dot) and reset to full, so the
+    // next run doesn't animate in from the wrong side.
+    circle.style.strokeDashoffset = isEmpty
+      ? 0
+      : -(1 - remainingFraction) * circumference;
   },
 
   toggleTimer() {
