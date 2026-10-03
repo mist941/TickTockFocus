@@ -51,7 +51,7 @@ TickTockFocus is a powerful Chrome extension that helps you manage your time wit
 
 ### Managing Presets
 - All your saved presets appear in the "Presets" tab
-- Click on a preset to select it
+- Click a preset to select it on the Timer tab
 - Use the "×" button to delete unwanted presets
 
 ## Installation

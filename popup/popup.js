@@ -698,6 +698,12 @@ const TimerManager = {
     this.updateStartButtonState();
   },
 
+  selectPreset(presetId) {
+    ELEMENTS.timer.presetSelect.value = presetId;
+    chrome.storage.local.set({ selectedPresetId: presetId });
+    this.updateStartButtonState();
+  },
+
   showTimerMessage(text, { isError = false } = {}) {
     ELEMENTS.timer.message.textContent = text;
     ELEMENTS.timer.message.classList.toggle("error", isError);
@@ -995,13 +1001,18 @@ const PresetFormManager = {
       presetsList.innerHTML = "";
 
       presets.forEach((preset) => {
-        const presetItem = document.createElement("div");
+        const presetItem = document.createElement("li");
         presetItem.className = "saved-preset-item";
         presetItem.dataset.presetId = preset.id;
 
-        const nameSpan = document.createElement("span");
-        nameSpan.className = "saved-preset-name";
-        nameSpan.textContent = preset.name;
+        const selectButton = document.createElement("button");
+        selectButton.type = "button";
+        selectButton.className = "saved-preset-name";
+        selectButton.textContent = preset.name;
+        selectButton.title = "Select on the Timer tab";
+        selectButton.addEventListener("click", () =>
+          this.openOnTimerTab(preset.id)
+        );
 
         const deleteButton = document.createElement("button");
         deleteButton.type = "button";
@@ -1013,7 +1024,7 @@ const PresetFormManager = {
           this.deletePreset(preset.id);
         });
 
-        presetItem.appendChild(nameSpan);
+        presetItem.appendChild(selectButton);
         presetItem.appendChild(deleteButton);
         presetsList.appendChild(presetItem);
       });
@@ -1021,6 +1032,13 @@ const PresetFormManager = {
       console.error("Error loading saved presets:", error);
       this.showMessage("Couldn't load your presets. Reopen the popup to try again.");
     }
+  },
+
+  openOnTimerTab(presetId) {
+    TimerManager.selectPreset(presetId);
+    TabManager.switchTab("timer");
+    // The clicked button is now hidden, so move focus somewhere useful.
+    ELEMENTS.timer.presetSelect.focus();
   },
 
   async deletePreset(presetId) {
@@ -1064,8 +1082,7 @@ const initializeApp = async () => {
 
     // Save selected preset when changed
     ELEMENTS.timer.presetSelect?.addEventListener("change", (e) => {
-      chrome.storage.local.set({ selectedPresetId: e.target.value });
-      TimerManager.updateStartButtonState();
+      TimerManager.selectPreset(e.target.value);
     });
 
     // Preset form event listeners

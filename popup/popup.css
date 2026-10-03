@@ -396,6 +396,8 @@ input[type="number"]::-webkit-inner-spin-button {
 
 .saved-presets-list {
   margin: var(--spacing-lg) 0;
+  padding: 0;
+  list-style: none;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
@@ -404,11 +406,8 @@ input[type="number"]::-webkit-inner-spin-button {
 .saved-preset-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-md);
   background-color: var(--color-bg-tertiary);
   border-radius: var(--border-radius-sm);
-  cursor: pointer;
 
   &:hover {
     background-color: var(--color-bg-hover);
@@ -416,7 +415,17 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .saved-preset-name {
+  flex: 1;
+  min-width: 0;
+  padding: var(--spacing-md);
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
   font-weight: bold;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
 }
 
 .saved-preset-delete {
