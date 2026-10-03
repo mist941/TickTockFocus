@@ -406,17 +406,7 @@ const TimerManager = {
       },
       (response) => {
         if (response.success) {
-          clearInterval(this.timer);
-          this.timer = null;
-          ELEMENTS.timer.countdownDisplay.textContent = "00:00";
-          this.updateCircleProgress(0);
-          this.updateToggleButton(false);
-
-          // Remove all preset points
-          const existingPoints = document.querySelectorAll(
-            ".preset-point, .preset-point-label"
-          );
-          existingPoints.forEach((point) => point.remove());
+          this.showIdleState();
 
           if (ELEMENTS.timer.presetSelect) {
             ELEMENTS.timer.presetSelect.value = "";
@@ -424,6 +414,20 @@ const TimerManager = {
         }
       }
     );
+  },
+
+  showIdleState() {
+    clearInterval(this.timer);
+    this.timer = null;
+    ELEMENTS.timer.countdownDisplay.textContent = "00:00";
+    this.updateCircleProgress(0);
+    this.updateToggleButton(false);
+
+    // Remove all preset points
+    const existingPoints = document.querySelectorAll(
+      ".preset-point, .preset-point-label"
+    );
+    existingPoints.forEach((point) => point.remove());
   },
 
   startCountdownUpdate() {
@@ -435,13 +439,12 @@ const TimerManager = {
     chrome.storage.local.get(
       ["endTime", "totalDuration", "clocks"],
       (result) => {
-        if (!result.endTime) return;
+        const timeLeft = result.endTime ? result.endTime - Date.now() : 0;
 
-        const now = Date.now();
-        const timeLeft = result.endTime - now;
-
+        // Only the view changes here. The service worker's countdown alarm
+        // completes the run; sending stopTimer would cancel its notification.
         if (timeLeft <= 0) {
-          this.stopTimer();
+          this.showIdleState();
           return;
         }
 
@@ -477,7 +480,8 @@ const TimerManager = {
 
   toggleTimer() {
     chrome.storage.local.get(["isRunning", "endTime"], (result) => {
-      if (result.isRunning) {
+      // Past its end time a run is finished, even if its alarm hasn't fired yet.
+      if (result.isRunning && result.endTime > Date.now()) {
         this.stopTimer();
       } else {
         const selectedPresetId = ELEMENTS.timer.presetSelect.value;

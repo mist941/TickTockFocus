@@ -1,110 +1,129 @@
-// Add timer management to background script
+const COUNTDOWN_ALARM = "countdown";
+const SEGMENT_ALARM_PREFIX = "clock_";
+const RUN_STATE_RESET = {
+  isRunning: false,
+  endTime: null,
+  totalDuration: null,
+  presetName: null,
+};
+
+// Message and alarm handlers run one at a time, so an alarm can't interleave
+// with a start or stop and act on the wrong run.
+let lifecycleQueue = Promise.resolve();
+function runExclusive(task) {
+  const result = lifecycleQueue.then(task);
+  lifecycleQueue = result.catch(() => {});
+  return result;
+}
+
+function getSegmentDurationMs(clock) {
+  return (clock.hours * 3600 + clock.minutes * 60 + clock.seconds) * 1000;
+}
+
+async function showNotification(title, message) {
+  try {
+    await chrome.notifications.create({
+      type: "basic",
+      iconUrl: "icons/chronometer.png",
+      title,
+      message,
+      priority: 2,
+    });
+  } catch (error) {
+    console.error("Couldn't show notification:", error);
+  }
+}
+
+async function completeTimer() {
+  const { presetName } = await chrome.storage.local.get("presetName");
+  await chrome.storage.local.set(RUN_STATE_RESET);
+  await showNotification("Timer Complete", `Timer "${presetName}" completed!`);
+}
+
+async function startTimer({ duration, presetName, clocks }) {
+  // Alarms can fire late, so the previous run may have ended without its
+  // countdown alarm firing yet. Complete it first so restarting can't swallow
+  // its "Timer Complete" notification.
+  const previousRun = await chrome.storage.local.get(["isRunning", "endTime"]);
+  if (previousRun.isRunning && previousRun.endTime <= Date.now()) {
+    await completeTimer();
+  }
+
+  await chrome.alarms.clear(COUNTDOWN_ALARM);
+
+  const startTime = Date.now();
+  const endTime = startTime + duration;
+  await chrome.alarms.create(COUNTDOWN_ALARM, { when: endTime });
+
+  // The last segment ends together with the countdown alarm, which announces it.
+  let accumulatedTime = 0;
+  for (const [index, clock] of clocks.slice(0, -1).entries()) {
+    accumulatedTime += getSegmentDurationMs(clock);
+    await chrome.alarms.create(`${SEGMENT_ALARM_PREFIX}${index}`, {
+      when: startTime + accumulatedTime,
+    });
+  }
+
+  await chrome.storage.local.set({
+    isRunning: true,
+    endTime,
+    totalDuration: duration,
+    presetName,
+    clocks,
+  });
+}
+
+async function stopTimer() {
+  await chrome.alarms.clear(COUNTDOWN_ALARM);
+
+  const { clocks } = await chrome.storage.local.get("clocks");
+  if (clocks) {
+    await Promise.all(
+      clocks.map((_, index) => chrome.alarms.clear(`${SEGMENT_ALARM_PREFIX}${index}`))
+    );
+  }
+
+  await chrome.storage.local.set(RUN_STATE_RESET);
+}
+
+async function handleAlarm(alarm) {
+  const run = await chrome.storage.local.get([
+    "isRunning",
+    "endTime",
+    "totalDuration",
+    "presetName",
+  ]);
+
+  // Ignore alarms left over from a run that was stopped, completed or replaced.
+  const runStartTime = run.endTime - run.totalDuration;
+  if (!run.isRunning || alarm.scheduledTime < runStartTime) return;
+
+  if (alarm.name === COUNTDOWN_ALARM) {
+    await completeTimer();
+  } else if (alarm.name.startsWith(SEGMENT_ALARM_PREFIX)) {
+    const clockIndex = Number(alarm.name.slice(SEGMENT_ALARM_PREFIX.length));
+    await showNotification(
+      "Clock Milestone Reached",
+      `Point #${clockIndex + 1} in "${run.presetName}" completed!`
+    );
+  }
+}
+
+const MESSAGE_HANDLERS = new Map([
+  ["startTimer", startTimer],
+  ["stopTimer", stopTimer],
+]);
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "startTimer") {
-    const { duration, presetName, clocks } = request;
+  const handler = MESSAGE_HANDLERS.get(request?.action);
+  if (!handler) return false;
 
-    // Clear any existing alarms
-    chrome.alarms.clear("countdown", () => {
-      // Create new alarm for the entire timer
-      chrome.alarms.create("countdown", {
-        when: Date.now() + duration,
-      });
-
-      // Create alarms for each individual clock
-      let accumulatedTime = 0;
-      clocks.forEach((clock, index) => {
-        // Calculate time in milliseconds for this clock
-        const clockMs =
-          (clock.hours * 3600 + clock.minutes * 60 + clock.seconds) * 1000;
-        accumulatedTime += clockMs;
-
-        // Create alarm for this clock
-        chrome.alarms.create(`clock_${index}`, {
-          when: Date.now() + accumulatedTime,
-        });
-      });
-
-      // Store timer info
-      chrome.storage.local.set(
-        {
-          isRunning: true,
-          endTime: Date.now() + duration,
-          totalDuration: duration,
-          presetName: presetName,
-          clocks,
-        },
-        () => {
-          sendResponse({ success: true });
-        }
-      );
-    });
-
-    return true; // Keep message channel open for async response
-  }
-
-  if (request.action === "stopTimer") {
-    // Clear the main countdown alarm
-    chrome.alarms.clear("countdown", () => {
-      // Clear all individual clock alarms
-      chrome.storage.local.get(["clocks"], (result) => {
-        if (result.clocks) {
-          result.clocks.forEach((_, index) => {
-            chrome.alarms.clear(`clock_${index}`);
-          });
-        }
-
-        chrome.storage.local.set(
-          {
-            isRunning: false,
-            endTime: null,
-            totalDuration: null,
-            presetName: null,
-          },
-          () => {
-            sendResponse({ success: true });
-          }
-        );
-      });
-    });
-
-    return true; // Keep message channel open for async response
-  }
+  runExclusive(() => handler(request)).then(() => sendResponse({ success: true }));
+  return true; // Keep message channel open for async response
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === "countdown") {
-    chrome.storage.local.get(["presetName", "clocks"], (result) => {
-      // Show notification for the entire preset completion
-      chrome.notifications.create({
-        type: "basic",
-        iconUrl: "icons/chronometer.png",
-        title: "Timer Complete",
-        message: `Timer "${result.presetName}" completed!`,
-        priority: 2,
-      });
-
-      // Reset timer state
-      chrome.storage.local.set({
-        isRunning: false,
-        endTime: null,
-        totalDuration: null,
-        presetName: null,
-      });
-    });
-  } else if (alarm.name.startsWith("clock_")) {
-    // This is a notification for an individual clock within the preset
-    chrome.storage.local.get(["presetName"], (result) => {
-      const clockIndex = parseInt(alarm.name.split("_")[1]);
-
-      chrome.notifications.create({
-        type: "basic",
-        iconUrl: "icons/chronometer.png",
-        title: "Clock Milestone Reached",
-        message: `Point #${clockIndex + 1} in "${
-          result.presetName
-        }" completed!`,
-        priority: 2,
-      });
-    });
-  }
+  runExclusive(() => handleAlarm(alarm)).catch((error) =>
+    console.error(`Handling alarm ${alarm.name} failed:`, error)
+  );
 });
