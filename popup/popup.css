@@ -97,7 +97,11 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .tab {
+  font: inherit;
   font-size: var(--font-size-md);
+  color: inherit;
+  background: none;
+  border: none;
   padding: var(--spacing-xs) var(--spacing-lg);
   cursor: pointer;
   border-radius: var(--border-radius-sm);
@@ -108,24 +112,29 @@ input[type="number"]::-webkit-inner-spin-button {
   }
 }
 
-.tab.active {
+.tab[aria-selected="true"] {
   background-color: var(--color-bg-active);
   color: var(--color-text-light);
 }
 
 /* Clock styles */
 .clock {
+  font: inherit;
   color: var(--color-text-light);
+  background: none;
+  border: none;
+  padding: var(--spacing-xs);
+  border-radius: var(--border-radius-sm);
   cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-bg-tertiary);
+  }
 }
 
 /* Content styles */
 .content {
   height: 100%;
-}
-
-.tab-content {
-  display: none;
 }
 
 /* Button styles */

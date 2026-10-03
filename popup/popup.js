@@ -316,35 +316,45 @@ const LegacyMigration = {
 
 // Tab Management with error handling
 const TabManager = {
-  switchTab(tabName) {
+  switchTab(tabName, { focusTab = false } = {}) {
     try {
-      ELEMENTS.tabs.contents.forEach((content) => {
-        content.style.display = "none";
-      });
-
+      // Only the selected tab is in the Tab order; arrow keys reach the others.
       ELEMENTS.tabs.list.forEach((tab) => {
-        tab.classList.remove("active");
+        const isSelected = tab.dataset.tab === tabName;
+        tab.setAttribute("aria-selected", String(isSelected));
+        tab.tabIndex = isSelected ? 0 : -1;
+        if (isSelected && focusTab) tab.focus();
       });
 
-      const selectedTab = document.querySelector(`.tab[data-tab="${tabName}"]`);
-      const selectedContent = document.querySelector(
-        `.tab-content[data-tab="${tabName}"]`
-      );
-
-      if (!selectedTab || !selectedContent) {
-        return;
-      }
-
-      selectedContent.style.display = "block";
-      selectedTab.classList.add("active");
+      ELEMENTS.tabs.contents.forEach((panel) => {
+        panel.hidden = panel.dataset.tab !== tabName;
+      });
     } catch (error) {
       console.error("Error switching tab:", error);
     }
   },
 
+  handleTabKeydown(event) {
+    const tabs = [...ELEMENTS.tabs.list];
+    const currentIndex = tabs.indexOf(event.currentTarget);
+    const lastIndex = tabs.length - 1;
+    const targetIndexByKey = {
+      ArrowRight: currentIndex === lastIndex ? 0 : currentIndex + 1,
+      ArrowLeft: currentIndex === 0 ? lastIndex : currentIndex - 1,
+      Home: 0,
+      End: lastIndex,
+    };
+    if (!Object.hasOwn(targetIndexByKey, event.key)) return;
+
+    event.preventDefault();
+    const targetTab = tabs[targetIndexByKey[event.key]];
+    this.switchTab(targetTab.dataset.tab, { focusTab: true });
+  },
+
   initializeTabs() {
     ELEMENTS.tabs.list.forEach((tab) => {
       tab.addEventListener("click", () => this.switchTab(tab.dataset.tab));
+      tab.addEventListener("keydown", (event) => this.handleTabKeydown(event));
     });
     this.switchTab("timer");
   },

@@ -9,17 +9,15 @@
 <body>
     <main class="container">
       <header class="header panel">
-        <nav class="tab-container">
-          <div class="tab" data-tab="timer">Timer</div>
-          <div class="tab" data-tab="presets">Presets</div>
-          <div class="tab" data-tab="usage">Usage</div>
-        </nav>
-        <div class="clock" id="clock">
-          00:00
+        <div class="tab-container" role="tablist" aria-label="Sections">
+          <button type="button" class="tab" role="tab" id="tab_timer" data-tab="timer" aria-controls="panel_timer" aria-selected="true">Timer</button>
+          <button type="button" class="tab" role="tab" id="tab_presets" data-tab="presets" aria-controls="panel_presets" aria-selected="false" tabindex="-1">Presets</button>
+          <button type="button" class="tab" role="tab" id="tab_usage" data-tab="usage" aria-controls="panel_usage" aria-selected="false" tabindex="-1">Usage</button>
         </div>
+        <button type="button" class="clock" id="clock" title="Switch between 12-hour and 24-hour time">00:00</button>
       </header>
       <div class="content panel">
-        <div class="tab-content" data-tab="timer">
+        <div class="tab-content" id="panel_timer" data-tab="timer" role="tabpanel" aria-labelledby="tab_timer">
           <div class="timer-circle">
             <svg class="timer-progress" viewBox="0 0 320 250" width="320" height="250" aria-hidden="true">
               <circle class="timer-progress-bg" cx="160" cy="125" r="90" fill="none"/>
@@ -38,7 +36,7 @@
             <p id="timer_message" class="form-message" aria-live="polite"></p>
           </div>
         </div>
-        <div class="tab-content" data-tab="presets">
+        <div class="tab-content" id="panel_presets" data-tab="presets" role="tabpanel" aria-labelledby="tab_presets" hidden>
           <header class="preset-header">
             <button class="button" id="create_preset">Create preset</button>
           </header>
@@ -81,8 +79,7 @@
           <p id="presets_message" class="form-message error" aria-live="polite"></p>
           <ul class="saved-presets-list"></ul>
         </div>
-        <div class="tab-content" data-tab="usage">
-          <div class="usage-container">
+        <div class="tab-content usage-container" id="panel_usage" data-tab="usage" role="tabpanel" aria-labelledby="tab_usage" tabindex="0" hidden>
             <h3>How to Use TickTockFocus</h3>
             <section class="usage-section">
               <h4>Creating Timer Presets</h4>
@@ -116,7 +113,6 @@
                 <li>Use the clock in the header to see the current time</li>
               </ul>
             </section>
-          </div>
         </div>
       </div>
     </main>
