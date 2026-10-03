@@ -440,30 +440,52 @@ const TimerManager = {
     );
   },
 
-  startTimer(duration) {
+  // Resolves once the service worker confirms the command. Rejects when it
+  // can't be reached, reports a failure, or answers without a response.
+  sendTimerCommand(message) {
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else if (!response?.success) {
+          reject(new Error(response?.error || "No response from the service worker"));
+        } else {
+          resolve(response);
+        }
+      });
+    });
+  },
+
+  showCommandError(action, error) {
+    console.error(`${action} failed:`, error);
+    this.showTimerMessage(
+      "Couldn't reach the timer. Close and reopen this popup, then try again.",
+      { isError: true }
+    );
+  },
+
+  async startTimer(duration) {
     const selectedPresetId = ELEMENTS.timer.presetSelect.value;
     const preset = this.presets.find((p) => p.id === selectedPresetId);
 
     if (!preset) return;
 
-    // Draw points on the circle when the timer starts
-    this.drawPresetPoints(preset.clocks);
-
-    // Send message to background script to start timer
-    chrome.runtime.sendMessage(
-      {
+    try {
+      await this.sendTimerCommand({
         action: "startTimer",
         duration: duration,
         presetName: preset.name,
         clocks: preset.clocks,
-      },
-      (response) => {
-        if (response.success) {
-          this.updateToggleButton(true);
-          this.startCountdownUpdate();
-        }
-      }
-    );
+      });
+    } catch (error) {
+      this.showCommandError("startTimer", error);
+      return;
+    }
+
+    // Draw points on the circle when the timer starts
+    this.drawPresetPoints(preset.clocks);
+    this.updateToggleButton(true);
+    this.startCountdownUpdate();
   },
 
   drawPresetPoints(clocks) {
@@ -555,22 +577,19 @@ const TimerManager = {
     });
   },
 
-  stopTimer() {
-    // Send message to background script to stop timer
-    chrome.runtime.sendMessage(
-      {
-        action: "stopTimer",
-      },
-      (response) => {
-        if (response.success) {
-          this.showIdleState();
+  async stopTimer() {
+    try {
+      await this.sendTimerCommand({ action: "stopTimer" });
+    } catch (error) {
+      this.showCommandError("stopTimer", error);
+      return;
+    }
 
-          if (ELEMENTS.timer.presetSelect) {
-            ELEMENTS.timer.presetSelect.value = "";
-          }
-        }
-      }
-    );
+    this.showIdleState();
+
+    if (ELEMENTS.timer.presetSelect) {
+      ELEMENTS.timer.presetSelect.value = "";
+    }
   },
 
   showIdleState() {

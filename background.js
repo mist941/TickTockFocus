@@ -122,7 +122,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   const handler = MESSAGE_HANDLERS.get(request?.action);
   if (!handler) return false;
 
-  runExclusive(() => handler(request)).then(() => sendResponse({ success: true }));
+  runExclusive(() => handler(request))
+    .then(() => sendResponse({ success: true }))
+    .catch((error) => {
+      console.error(`${request.action} failed:`, error);
+      sendResponse({ success: false, error: error.message });
+    });
   return true; // Keep message channel open for async response
 });
 
