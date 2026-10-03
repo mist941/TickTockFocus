@@ -63,8 +63,8 @@ TickTockFocus is a powerful Chrome extension that helps you manage your time wit
 ## Privacy
 
 TickTockFocus respects your privacy:
-- All data is stored locally in your browser
-- No data is sent to external servers
+- Presets and settings are saved with Chrome's sync storage, so they follow your Google account when Chrome Sync is on; the running timer's state stays in your browser
+- No data is sent to the developer or to any server besides Chrome Sync
 - No tracking or analytics
 
 ## License
