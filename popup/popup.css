@@ -140,12 +140,17 @@ input[type="number"]::-webkit-inner-spin-button {
   color: var(--color-text-primary);
   width: 100%;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background-color: var(--color-bg-hover);
   }
 
-  &:active {
+  &:active:not(:disabled) {
     background-color: var(--color-bg-active);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 }
 
@@ -230,13 +235,25 @@ input[type="number"]::-webkit-inner-spin-button {
 
 /* Message styles */
 .form-message {
-  color: var(--color-text-error);
   font-size: var(--font-size-sm);
   margin: var(--spacing-sm) 0;
 
   &:empty {
     margin: 0;
   }
+
+  &.error {
+    color: var(--color-text-error);
+  }
+}
+
+.preset-form .form-message {
+  text-align: left;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
 }
 
 /* Button group styles */

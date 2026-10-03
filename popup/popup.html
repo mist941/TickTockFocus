@@ -30,10 +30,11 @@
             </div>
           </div>
           <div class="timer-controls">
-            <select id="preset_select" class="preset-select">
+            <select id="preset_select" class="preset-select" aria-describedby="timer_message">
               <option value="">Select preset</option>
             </select>
-            <button id="timer_toggle" class="button">Start</button>
+            <button id="timer_toggle" class="button" disabled>Start</button>
+            <p id="timer_message" class="form-message" aria-live="polite"></p>
           </div>
         </div>
         <div class="tab-content" data-tab="presets">
@@ -42,34 +43,41 @@
           </header>
           <form id="preset_form" class="preset-form">
             <div class="preset-container">
-              <input type="text" class="input" id="preset_name" placeholder="Preset name" required autocomplete="off">
-              <div class="clock-settings">
-                <div class="clock-input-container">
-                  <div class="clock-input-wrapper">
-                    <input type="number" class="input clock-input" id="preset_hours" placeholder="00" min="0" max="60">
-                    <p class="clock-input-label">H</p>
-                  </div>:
-                  <div class="clock-input-wrapper">
-                    <input type="number" class="input clock-input" id="preset_minutes" placeholder="00" min="0" max="60">
-                    <p class="clock-input-label">M</p>
-                  </div>:
-                  <div class="clock-input-wrapper">
-                    <input type="number" class="input clock-input" id="preset_seconds" placeholder="00" min="1" max="60">
-                    <p class="clock-input-label">S</p>
+              <div class="form-field">
+                <input type="text" class="input" id="preset_name" placeholder="Preset name" required autocomplete="off" aria-describedby="preset_name_error">
+                <p id="preset_name_error" class="form-message error" aria-live="polite"></p>
+              </div>
+              <div class="form-field">
+                <div class="clock-settings">
+                  <div class="clock-input-container">
+                    <div class="clock-input-wrapper">
+                      <input type="number" class="input clock-input" id="preset_hours" placeholder="00" min="0" max="60" aria-describedby="segment_error">
+                      <p class="clock-input-label">H</p>
+                    </div>:
+                    <div class="clock-input-wrapper">
+                      <input type="number" class="input clock-input" id="preset_minutes" placeholder="00" min="0" max="60" aria-describedby="segment_error">
+                      <p class="clock-input-label">M</p>
+                    </div>:
+                    <div class="clock-input-wrapper">
+                      <input type="number" class="input clock-input" id="preset_seconds" placeholder="00" min="1" max="60" aria-describedby="segment_error">
+                      <p class="clock-input-label">S</p>
+                    </div>
                   </div>
+                  <button class="button" type="button" id="add_preset_clock">Add</button>
                 </div>
-                <button class="button" type="button" id="add_preset_clock">Add</button>
+                <p id="segment_error" class="form-message error" aria-live="polite"></p>
               </div>
             </div>
             <div class="clock-presets-list">
-              
+
             </div>
+            <p id="segments_error" class="form-message error" aria-live="polite"></p>
             <div class="buttons-group">
               <button class="button button-secondary" id="cancel_preset" type="button">Cancel</button>
               <button class="button" id="add_preset" type="button">Create</button>
             </div>
           </form>
-          <p id="presets_message" class="form-message" aria-live="polite"></p>
+          <p id="presets_message" class="form-message error" aria-live="polite"></p>
           <div class="saved-presets-list"></div>
         </div>
         <div class="tab-content" data-tab="usage">
