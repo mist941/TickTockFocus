@@ -706,7 +706,18 @@ const TimerManager = {
     if (!button) return;
     this.isRunning = isRunning;
     button.textContent = isRunning ? "Stop" : "Start";
+    this.updatePresetSelectState();
     this.updateStartButtonState();
+  },
+
+  // Locked during a run, so the dropdown can't show one preset while the ring
+  // and countdown show another.
+  updatePresetSelectState() {
+    const { presetSelect, toggleButton } = ELEMENTS.timer;
+    const hadFocus = document.activeElement === presetSelect;
+    presetSelect.disabled = this.isRunning;
+    // A disabled control loses focus; keep it on the timer controls.
+    if (this.isRunning && hadFocus) toggleButton.focus();
   },
 
   selectPreset(presetId) {
@@ -1133,10 +1144,12 @@ const PresetFormManager = {
   },
 
   openOnTimerTab(presetId) {
-    TimerManager.selectPreset(presetId);
+    // During a run the dropdown is disabled, so the selection stays as it is.
+    if (!TimerManager.isRunning) TimerManager.selectPreset(presetId);
     TabManager.switchTab("timer");
     // The clicked button is now hidden, so move focus somewhere useful.
-    ELEMENTS.timer.presetSelect.focus();
+    const { presetSelect, toggleButton } = ELEMENTS.timer;
+    (presetSelect.disabled ? toggleButton : presetSelect).focus();
   },
 
   async deletePreset(presetId) {
