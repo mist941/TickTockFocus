@@ -25,7 +25,7 @@ async function showNotification(title, message) {
   try {
     await chrome.notifications.create({
       type: "basic",
-      iconUrl: "icons/chronometer.png",
+      iconUrl: "icons/icon512.png",
       title,
       message,
       priority: 2,

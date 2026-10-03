@@ -2,7 +2,7 @@
 
 TickTockFocus is a powerful Chrome extension that helps you manage your time with customizable timer presets. Perfect for productivity techniques like Pomodoro, time-boxing, or any workflow that requires structured time management.
 
-![TickTockFocus](icons/chronometer.png)
+![TickTockFocus](icons/icon512.png)
 
 ## Features
 
@@ -58,11 +58,11 @@ TickTockFocus is a powerful Chrome extension that helps you manage your time wit
 
 1. Download the extension from the Chrome Web Store
 2. Click "Add to Chrome"
-3. The Chronometer icon will appear in your browser toolbar
+3. The TickTockFocus icon will appear in your browser toolbar
 
 ## Privacy
 
-Chronometer respects your privacy:
+TickTockFocus respects your privacy:
 - All data is stored locally in your browser
 - No data is sent to external servers
 - No tracking or analytics
