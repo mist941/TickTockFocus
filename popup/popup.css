@@ -562,3 +562,14 @@ input[type="number"]::-webkit-inner-spin-button {
 .usage-section strong {
   color: var(--color-text-light);
 }
+
+/* Reduced motion: state changes still apply, only without animating */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition-default: none;
+  }
+
+  .timer-progress-bar {
+    transition: none;
+  }
+}
