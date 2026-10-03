@@ -12,10 +12,12 @@
   --color-text-secondary: #ccc;
   --color-text-light: #fff;
   --color-text-danger: #ff4444;
+  --color-text-error: #ff6b6b;
 
   /* Border colors */
   --color-border-primary: rgb(52 52 56);
   --color-border-secondary: #666;
+  --color-focus-ring: #4caf50;
 
   /* Spacing */
   --spacing-xs: 4px;
@@ -30,7 +32,8 @@
   --border-radius-lg: 15px;
 
   /* Transitions */
-  --transition-default: 300ms all ease;
+  /* Not "all": focus outlines should appear at once, not fade in */
+  --transition-default: background-color 300ms ease, color 300ms ease;
 
   /* Font sizes */
   --font-size-sm: 14px;
@@ -57,6 +60,11 @@ body {
 
 p {
   margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 /* Remove number input spinners */
@@ -96,7 +104,11 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .tab {
+  font: inherit;
   font-size: var(--font-size-md);
+  color: inherit;
+  background: none;
+  border: none;
   padding: var(--spacing-xs) var(--spacing-lg);
   cursor: pointer;
   border-radius: var(--border-radius-sm);
@@ -107,24 +119,29 @@ input[type="number"]::-webkit-inner-spin-button {
   }
 }
 
-.tab.active {
+.tab[aria-selected="true"] {
   background-color: var(--color-bg-active);
   color: var(--color-text-light);
 }
 
 /* Clock styles */
 .clock {
+  font: inherit;
   color: var(--color-text-light);
+  background: none;
+  border: none;
+  padding: var(--spacing-xs);
+  border-radius: var(--border-radius-sm);
   cursor: pointer;
+
+  &:hover {
+    background-color: var(--color-bg-tertiary);
+  }
 }
 
 /* Content styles */
 .content {
   height: 100%;
-}
-
-.tab-content {
-  display: none;
 }
 
 /* Button styles */
@@ -139,12 +156,17 @@ input[type="number"]::-webkit-inner-spin-button {
   color: var(--color-text-primary);
   width: 100%;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background-color: var(--color-bg-hover);
   }
 
-  &:active {
+  &:active:not(:disabled) {
     background-color: var(--color-bg-active);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 }
 
@@ -188,12 +210,17 @@ input[type="number"]::-webkit-inner-spin-button {
 /* Input styles */
 .input {
   background-color: var(--color-bg-tertiary);
-  color: var(--color-text-primary);
+  color: var(--color-text-light);
   border: none;
   padding: var(--spacing-xs) var(--spacing-lg);
   border-radius: var(--border-radius-sm);
   font-size: var(--font-size-md);
-  outline: none;
+
+  /* 4.8:1 on the input background */
+  &::placeholder {
+    color: var(--color-text-primary);
+    opacity: 1;
+  }
 }
 
 /* Clock settings styles */
@@ -213,18 +240,60 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .clock-input-wrapper {
-  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
 }
 
 .clock-input {
-  width: 40px;
+  width: 28px;
+  text-align: center;
 }
 
 .clock-input-label {
+  font-size: var(--font-size-sm);
+}
+
+.input-label {
+  font-size: var(--font-size-sm);
+  text-align: left;
+  margin-bottom: var(--spacing-xs);
+}
+
+/* Hidden visually but still read by screen readers */
+.visually-hidden {
   position: absolute;
-  right: var(--spacing-sm);
-  transform: translateY(-50%);
-  top: 50%;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Message styles */
+.form-message {
+  font-size: var(--font-size-sm);
+  margin: var(--spacing-sm) 0;
+
+  &:empty {
+    margin: 0;
+  }
+
+  &.error {
+    color: var(--color-text-error);
+  }
+}
+
+.preset-form .form-message {
+  text-align: left;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
 }
 
 /* Button group styles */
@@ -235,6 +304,7 @@ input[type="number"]::-webkit-inner-spin-button {
 
 /* Preset list styles */
 .clock-presets-list {
+  list-style: none;
   margin: var(--spacing-lg) 0;
   min-height: 25px;
   border: 1px dashed var(--color-border-primary);
@@ -265,45 +335,47 @@ input[type="number"]::-webkit-inner-spin-button {
   min-width: 30px;
 }
 
-.preset-remove-btn {
+.preset-item-actions {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.preset-move-btn,
+.preset-remove-btn {
   background: none;
   border: none;
+  border-radius: var(--border-radius-sm);
   color: var(--color-text-primary);
   cursor: pointer;
   font-size: var(--font-size-lg);
   padding: 0 var(--spacing-sm);
+}
 
-  &:hover {
-    color: var(--color-text-danger);
+.preset-move-btn {
+  &:hover:not(:disabled) {
+    color: var(--color-text-light);
   }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+}
+
+.preset-remove-btn:hover {
+  color: var(--color-text-danger);
 }
 
 /* Timer styles */
 .timer-circle {
   position: relative;
-  width: 300px;
-  height: 240px;
-  margin: 20px auto;
+  width: 320px;
+  height: 250px;
+  margin: 10px auto;
   display: flex;
   justify-content: center;
   align-items: center;
-}
-
-.preset-point-label {
-  font-size: 12px;
-  fill: var(--color-text-primary);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  transform: rotate(90deg);
-  width: 100%;
-  height: 100%;
-  font-weight: 500;
-}
-
-.timer-progress {
-  transform: rotate(-90deg);
 }
 
 .timer-progress circle {
@@ -317,9 +389,21 @@ input[type="number"]::-webkit-inner-spin-button {
 .timer-progress-bar {
   stroke: #4caf50;
   stroke-linecap: round;
-  stroke-dasharray: 565.48; /* 2*π*radius */
-  stroke-dashoffset: 565.48;
   transition: stroke-dashoffset 1s linear;
+
+  &.is-empty {
+    visibility: hidden;
+  }
+}
+
+.preset-point {
+  fill: rgb(234 179 8);
+}
+
+.preset-point-label {
+  font-size: 11px;
+  fill: var(--color-text-primary);
+  dominant-baseline: central;
 }
 
 .timer-display {
@@ -333,6 +417,7 @@ input[type="number"]::-webkit-inner-spin-button {
 .countdown {
   font-size: 2.5rem;
   color: var(--color-text-light);
+  font-variant-numeric: tabular-nums;
 }
 
 .timer-controls {
@@ -353,7 +438,6 @@ input[type="number"]::-webkit-inner-spin-button {
   font-size: var(--font-size-md);
   cursor: pointer;
   min-width: 120px;
-  outline: none;
 
   &:disabled {
     opacity: 0.5;
@@ -371,6 +455,8 @@ input[type="number"]::-webkit-inner-spin-button {
 
 .saved-presets-list {
   margin: var(--spacing-lg) 0;
+  padding: 0;
+  list-style: none;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
@@ -379,11 +465,8 @@ input[type="number"]::-webkit-inner-spin-button {
 .saved-preset-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-md);
   background-color: var(--color-bg-tertiary);
   border-radius: var(--border-radius-sm);
-  cursor: pointer;
 
   &:hover {
     background-color: var(--color-bg-hover);
@@ -391,7 +474,17 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .saved-preset-name {
+  flex: 1;
+  min-width: 0;
+  padding: var(--spacing-md);
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
   font-weight: bold;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
 }
 
 .saved-preset-delete {

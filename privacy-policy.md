@@ -1,32 +1,35 @@
 # Privacy Policy for TickTockFocus
 
-Last Updated: 01.03.2025
+Last Updated: 03.10.2026
 
 ## Introduction
 Welcome to TickTockFocus. We respect your privacy and are committed to protecting your personal data. This privacy policy explains how we collect, use, and safeguard your information when you use our application.
 
 ## Information We Collect
-TickTockFocus does not collect, store, or share any personal data. The extension only uses local storage within your browser to save:
+TickTockFocus does not collect, store, or share any personal data. The extension uses Chrome's built-in storage to save:
 - Timer presets
 - User preferences and settings
 - Focus session data
 
+Timer presets and settings are saved with Chrome's sync storage (`chrome.storage.sync`). If you are signed in to Chrome and Chrome Sync is turned on, Chrome syncs them through your Google account so they are available on your other devices. If sync is off, they stay in your browser. Focus session data (the timer that is currently running) is only stored in your browser.
+
 ## Chrome Extension Permissions
 To function properly, TickTockFocus requests the following Chrome permissions:
 
-- **Storage**: Used to save timer presets and settings locally
+- **Storage**: Used to save timer presets and settings (synced through your Google account when Chrome Sync is on) and the state of the running timer
 - **Alarms**: Used to schedule timers and notifications
 - **Notifications**: Used to alert users when a timer completes
 
-All data remains within your browser and is never sent to external servers.
+Your data is never sent to the developer or to any server other than Chrome Sync.
 
 ## Data Storage
-- All data is stored locally in your browser
-- We do not transmit or store your data on external servers
+- Timer presets and settings are stored with Chrome's sync storage. When Chrome Sync is on, Google stores and syncs them as part of your Google account, under Google's Privacy Policy
+- Focus session data is stored only in your browser
+- We do not operate any servers and never receive or store your data
 - Your timer presets and focus session data remains private and under your control
 
 ## Third-Party Services
-TickTockFocus does not use any third-party tracking, analytics, or external services. We maintain a strict no-data-sharing policy to ensure your privacy.
+TickTockFocus does not use any third-party tracking or analytics. The only external service involved is Chrome Sync, which is part of Chrome and which you control in Chrome's settings. We maintain a strict no-data-sharing policy to ensure your privacy.
 
 ## Your Rights
 You have the right to:
@@ -34,9 +37,10 @@ You have the right to:
 - Delete your data from the extension
 - Manage your extension permissions
 - Opt-out of notifications
+- Stop syncing your presets and settings by turning off Chrome Sync for extensions
 
 ## Data Security
-Since no user data is transmitted or stored externally, your information remains completely private and secure within your browser environment.
+Your data never reaches the developer. Presets and settings synced through Chrome Sync are protected by your Google account's security, and everything else stays within your browser environment.
 
 ## Children's Privacy
 TickTockFocus does not knowingly collect personal information from children under 13. If you are a parent or guardian and believe your child has provided us with personal information, please contact us.

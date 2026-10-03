@@ -1,11 +1,35 @@
 // Constants for configuration
 const CONFIG = {
-  MAX_TIME_VALUE: 99,
   UPDATE_INTERVAL: 1000,
   DEFAULT_TIME_FORMAT: "24h",
+  // In packed extensions Chrome fires alarms at most once every 30 seconds
+  // and may delay them further (unpacked extensions are exempt). Each segment
+  // ends with an alarm, so a shorter segment would be announced late.
+  MIN_SEGMENT_SECONDS: 30,
+  // The only definition of the segment ranges: input clamping, validation and
+  // the inputs' min/max attributes (set on startup) all read it.
+  SEGMENT_FIELD_LIMITS: {
+    hours: { min: 0, max: 23, label: "Hours" },
+    minutes: { min: 0, max: 59, label: "Minutes" },
+    seconds: { min: 0, max: 59, label: "Seconds" },
+  },
+  // Ring marker labels: distance outside the ring, and an upper bound for one
+  // 11px digit's width and the line height, used to keep labels from overlapping.
+  POINT_LABEL: {
+    OFFSET: 16,
+    CHARACTER_WIDTH: 6.2,
+    HEIGHT: 13,
+    GAP: 2,
+  },
+  // Keeps every preset far below chrome.storage.sync's 8 KB per-item quota
+  // (the worst case is about 3 KB).
+  MAX_PRESET_NAME_LENGTH: 50,
+  MAX_SEGMENTS_PER_PRESET: 50,
   STORAGE_KEYS: {
     SETTINGS: "settings",
-    PRESETS: "presets",
+    PRESET_PREFIX: "preset_",
+    LEGACY_PRESETS: "presets",
+    LEGACY_SETTINGS: "settings",
     END_TIME: "endTime",
   },
 };
@@ -19,6 +43,8 @@ const ELEMENTS = new Proxy(
       clock: document.getElementById("clock"),
       presetSelect: document.getElementById("preset_select"),
       progressBar: document.querySelector(".timer-progress-bar"),
+      presetPoints: document.querySelector(".preset-points"),
+      message: document.getElementById("timer_message"),
     },
     preset: {
       header: document.querySelector(".preset-header"),
@@ -33,6 +59,13 @@ const ELEMENTS = new Proxy(
         seconds: document.getElementById("preset_seconds"),
       },
       list: document.querySelector(".clock-presets-list"),
+      segmentsStatus: document.getElementById("segments_status"),
+      message: document.getElementById("presets_message"),
+      errors: {
+        name: document.getElementById("preset_name_error"),
+        segment: document.getElementById("segment_error"),
+        segments: document.getElementById("segments_error"),
+      },
     },
     tabs: {
       list: document.querySelectorAll(".tab"),
@@ -54,12 +87,28 @@ const ELEMENTS = new Proxy(
 const Utils = {
   padNumber: (num, size = 2) => String(num).padStart(size, "0"),
 
-  validateTimeInput: (value) => {
-    const numValue = parseInt(value);
-    return (
-      !isNaN(numValue) && numValue >= 0 && numValue <= CONFIG.MAX_TIME_VALUE
-    );
+  // background.js computes segment durations the same way; keep them in agreement.
+  getSegmentDurationMs: (clock) =>
+    ((clock.hours || 0) * 3600 + (clock.minutes || 0) * 60 + (clock.seconds || 0)) *
+    1000,
+
+  getClocksDurationMs: (clocks) =>
+    clocks.reduce((total, clock) => total + Utils.getSegmentDurationMs(clock), 0),
+
+  // HH:MM:SS, rounded up so a countdown only reads 00:00:00 once it has ended.
+  formatDuration(milliseconds) {
+    const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return [hours, minutes, seconds].map((value) => Utils.padNumber(value)).join(":");
   },
+
+  boxesOverlap: (first, second) =>
+    first.left < second.right &&
+    second.left < first.right &&
+    first.top < second.bottom &&
+    second.top < first.bottom,
 
   createElementWithClass: (tag, className) => {
     const element = document.createElement(tag);
@@ -79,79 +128,234 @@ const Utils = {
   },
 };
 
-// Local Storage Operations with error handling
+// Presets and settings live in chrome.storage.sync so they follow the user's
+// Google account. A write that hits a sync quota falls back to
+// chrome.storage.local, so every read merges both areas.
 const Storage = {
-  get(key) {
+  isQuotaError(error) {
+    return /quota/i.test(error?.message || "");
+  },
+
+  presetKey(presetId) {
+    return `${CONFIG.STORAGE_KEYS.PRESET_PREFIX}${presetId}`;
+  },
+
+  async getItems(keys) {
+    const [syncItems, localItems] = await Promise.all([
+      chrome.storage.sync.get(keys),
+      chrome.storage.local.get(keys),
+    ]);
+    return { ...syncItems, ...localItems };
+  },
+
+  async setItems(items) {
     try {
-      const data = localStorage.getItem(key);
-      return data ? JSON.parse(data) : null;
+      await chrome.storage.sync.set(items);
     } catch (error) {
-      console.error(`Error reading ${key}:`, error);
-      return null;
+      if (!this.isQuotaError(error)) throw error;
+
+      const entries = Object.entries(items);
+      if (entries.length === 1) {
+        await chrome.storage.local.set(items);
+        return;
+      }
+      // Retry one by one so only the items that don't fit stay local-only.
+      for (const [key, value] of entries) {
+        await this.setItems({ [key]: value });
+      }
+      return;
     }
+    // A local copy left by an earlier fallback would shadow the synced value.
+    await chrome.storage.local.remove(Object.keys(items));
   },
 
-  set(key, value) {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-      return true;
-    } catch (error) {
-      console.error(`Error saving ${key}:`, error);
-      return false;
-    }
+  async getSettings() {
+    const items = await this.getItems(CONFIG.STORAGE_KEYS.SETTINGS);
+    return items[CONFIG.STORAGE_KEYS.SETTINGS] || {};
   },
 
-  getSettings() {
-    return this.get(CONFIG.STORAGE_KEYS.SETTINGS) || {};
-  },
-
-  setSettings(key, value) {
-    const settings = this.getSettings();
+  async setSettings(key, value) {
+    const settings = await this.getSettings();
     settings[key] = value;
-    return this.set(CONFIG.STORAGE_KEYS.SETTINGS, settings);
+    await this.setItems({ [CONFIG.STORAGE_KEYS.SETTINGS]: settings });
   },
 
-  getPresets() {
-    return this.get(CONFIG.STORAGE_KEYS.PRESETS) || [];
+  async getPresets() {
+    const items = await this.getItems(null);
+    return Object.entries(items)
+      .filter(([key]) => key.startsWith(CONFIG.STORAGE_KEYS.PRESET_PREFIX))
+      .map(([, preset]) => preset)
+      .sort((first, second) => (first.createdAt || 0) - (second.createdAt || 0));
   },
 
   async savePreset(preset) {
-    const presets = this.getPresets();
-    return this.set(CONFIG.STORAGE_KEYS.PRESETS, [...presets, preset]);
+    await this.setItems({ [this.presetKey(preset.id)]: preset });
+  },
+
+  async deletePreset(presetId) {
+    const key = this.presetKey(presetId);
+    await Promise.all([
+      chrome.storage.sync.remove(key),
+      chrome.storage.local.remove(key),
+    ]);
+  },
+};
+
+// One-time move of v1.0 data from the popup's localStorage to chrome.storage.
+// The old keys are removed only after the copies read back intact, so a run
+// that fails or is interrupted loses nothing and retries on the next open.
+const LegacyMigration = {
+  readLegacyKey(key) {
+    const rawValue = localStorage.getItem(key);
+    if (rawValue === null) return { exists: false };
+    try {
+      return { exists: true, isReadable: true, value: JSON.parse(rawValue) };
+    } catch (error) {
+      return { exists: true, isReadable: false };
+    }
+  },
+
+  isPresetLike(preset) {
+    return (
+      preset !== null &&
+      typeof preset === "object" &&
+      Array.isArray(preset.clocks)
+    );
+  },
+
+  // Storage may hand objects back with their keys in a different order.
+  toComparableJson(value) {
+    return JSON.stringify(value, (key, nestedValue) =>
+      nestedValue && typeof nestedValue === "object" && !Array.isArray(nestedValue)
+        ? Object.fromEntries(
+            Object.entries(nestedValue).sort(([first], [second]) =>
+              first < second ? -1 : first > second ? 1 : 0
+            )
+          )
+        : nestedValue
+    );
+  },
+
+  collectPresets(legacyPresets, itemsToWrite) {
+    const presets = legacyPresets.value ?? [];
+    if (!Array.isArray(presets) || !presets.every(this.isPresetLike)) {
+      return false;
+    }
+
+    const usedIds = new Set();
+    presets.forEach((preset, index) => {
+      // Presets are stored by id, so a missing or repeated id would lose one.
+      // The replacement depends only on the data, so a retried run reuses it.
+      if (typeof preset.id !== "string" || usedIds.has(preset.id)) {
+        preset.id = `${typeof preset.id === "string" ? preset.id : "legacy"}-${index}`;
+      }
+      usedIds.add(preset.id);
+      itemsToWrite[Storage.presetKey(preset.id)] = preset;
+    });
+    return true;
+  },
+
+  async collectSettings(legacySettings, itemsToWrite) {
+    const settings = legacySettings.value;
+    if (settings !== null && (typeof settings !== "object" || Array.isArray(settings))) {
+      return false;
+    }
+
+    const settingsKey = CONFIG.STORAGE_KEYS.SETTINGS;
+    const storedItems = await Storage.getItems(settingsKey);
+    // Settings that already arrived through sync win over this device's old copy.
+    if (settings && !storedItems[settingsKey]) {
+      itemsToWrite[settingsKey] = settings;
+    }
+    return true;
+  },
+
+  // v1.0 stored the ring progress every second; it is now derived from endTime.
+  async removeTimerProgress() {
+    const { timerProgress } = await chrome.storage.local.get("timerProgress");
+    if (timerProgress !== undefined) {
+      await chrome.storage.local.remove("timerProgress");
+    }
+  },
+
+  async run() {
+    await this.removeTimerProgress();
+
+    const { LEGACY_PRESETS, LEGACY_SETTINGS } = CONFIG.STORAGE_KEYS;
+    const legacyPresets = this.readLegacyKey(LEGACY_PRESETS);
+    const legacySettings = this.readLegacyKey(LEGACY_SETTINGS);
+    const itemsToWrite = {};
+    const legacyKeysToRemove = [];
+
+    // Values v1.0 itself couldn't have read are left where they are.
+    if (legacyPresets.isReadable && this.collectPresets(legacyPresets, itemsToWrite)) {
+      legacyKeysToRemove.push(LEGACY_PRESETS);
+    }
+    if (
+      legacySettings.isReadable &&
+      (await this.collectSettings(legacySettings, itemsToWrite))
+    ) {
+      legacyKeysToRemove.push(LEGACY_SETTINGS);
+    }
+    if (legacyKeysToRemove.length === 0) return;
+
+    const keysToVerify = Object.keys(itemsToWrite);
+    if (keysToVerify.length > 0) {
+      await Storage.setItems(itemsToWrite);
+      const storedItems = await Storage.getItems(keysToVerify);
+      const isIntact = keysToVerify.every(
+        (key) =>
+          this.toComparableJson(storedItems[key]) ===
+          this.toComparableJson(itemsToWrite[key])
+      );
+      if (!isIntact) throw new Error("Migrated data did not read back intact");
+    }
+
+    legacyKeysToRemove.forEach((key) => localStorage.removeItem(key));
   },
 };
 
 // Tab Management with error handling
 const TabManager = {
-  switchTab(tabName) {
+  switchTab(tabName, { focusTab = false } = {}) {
     try {
-      ELEMENTS.tabs.contents.forEach((content) => {
-        content.style.display = "none";
-      });
-
+      // Only the selected tab is in the Tab order; arrow keys reach the others.
       ELEMENTS.tabs.list.forEach((tab) => {
-        tab.classList.remove("active");
+        const isSelected = tab.dataset.tab === tabName;
+        tab.setAttribute("aria-selected", String(isSelected));
+        tab.tabIndex = isSelected ? 0 : -1;
+        if (isSelected && focusTab) tab.focus();
       });
 
-      const selectedTab = document.querySelector(`.tab[data-tab="${tabName}"]`);
-      const selectedContent = document.querySelector(
-        `.tab-content[data-tab="${tabName}"]`
-      );
-
-      if (!selectedTab || !selectedContent) {
-        return;
-      }
-
-      selectedContent.style.display = "block";
-      selectedTab.classList.add("active");
+      ELEMENTS.tabs.contents.forEach((panel) => {
+        panel.hidden = panel.dataset.tab !== tabName;
+      });
     } catch (error) {
       console.error("Error switching tab:", error);
     }
   },
 
+  handleTabKeydown(event) {
+    const tabs = [...ELEMENTS.tabs.list];
+    const currentIndex = tabs.indexOf(event.currentTarget);
+    const lastIndex = tabs.length - 1;
+    const targetIndexByKey = {
+      ArrowRight: currentIndex === lastIndex ? 0 : currentIndex + 1,
+      ArrowLeft: currentIndex === 0 ? lastIndex : currentIndex - 1,
+      Home: 0,
+      End: lastIndex,
+    };
+    if (!Object.hasOwn(targetIndexByKey, event.key)) return;
+
+    event.preventDefault();
+    const targetTab = tabs[targetIndexByKey[event.key]];
+    this.switchTab(targetTab.dataset.tab, { focusTab: true });
+  },
+
   initializeTabs() {
     ELEMENTS.tabs.list.forEach((tab) => {
       tab.addEventListener("click", () => this.switchTab(tab.dataset.tab));
+      tab.addEventListener("keydown", (event) => this.handleTabKeydown(event));
     });
     this.switchTab("timer");
   },
@@ -159,6 +363,8 @@ const TabManager = {
 
 // Clock Management with time handling
 const ClockManager = {
+  timeFormat: CONFIG.DEFAULT_TIME_FORMAT,
+
   formatTime(hours, minutes, format) {
     const formattedHours = format === "12h" ? hours % 12 || 12 : hours;
     const amPm = format === "12h" ? (hours >= 12 ? "PM" : "AM") : "";
@@ -170,27 +376,33 @@ const ClockManager = {
   updateClock() {
     try {
       const now = new Date();
-      const settings = Storage.getSettings();
-      const timeFormat = settings.timeFormat || CONFIG.DEFAULT_TIME_FORMAT;
-
       ELEMENTS.timer.clock.textContent = this.formatTime(
         now.getHours(),
         now.getMinutes(),
-        timeFormat
+        this.timeFormat
       );
     } catch (error) {
       console.error("Error updating clock:", error);
     }
   },
 
-  toggleTimeFormat() {
-    const settings = Storage.getSettings();
-    const newFormat = settings.timeFormat === "12h" ? "24h" : "12h";
-    Storage.setSettings("timeFormat", newFormat);
+  async toggleTimeFormat() {
+    this.timeFormat = this.timeFormat === "12h" ? "24h" : "12h";
     this.updateClock();
+    try {
+      await Storage.setSettings("timeFormat", this.timeFormat);
+    } catch (error) {
+      console.error("Error saving time format:", error);
+    }
   },
 
-  startClockUpdate() {
+  async startClockUpdate() {
+    try {
+      const settings = await Storage.getSettings();
+      this.timeFormat = settings.timeFormat || CONFIG.DEFAULT_TIME_FORMAT;
+    } catch (error) {
+      console.error("Error loading settings:", error);
+    }
     this.updateClock();
     setInterval(() => this.updateClock(), CONFIG.UPDATE_INTERVAL);
   },
@@ -198,297 +410,289 @@ const ClockManager = {
 
 // Timer Management with state handling
 const TimerManager = {
-  timer: null,
+  countdownIntervalId: null,
   endTime: null,
   totalDuration: null,
+  presets: [],
+  isRunning: false,
 
   getPresetDuration(presetId) {
     try {
-      const presets = Storage.getPresets();
-      const preset = presets.find((p) => p.id === presetId);
+      const preset = this.presets.find((p) => p.id === presetId);
 
       if (!preset) return null;
 
-      // Calculate total milliseconds from all clocks in the preset
-      return preset.clocks.reduce((total, clock) => {
-        const hours = (clock.hours || 0) * 60 * 60 * 1000;
-        const minutes = (clock.minutes || 0) * 60 * 1000;
-        const seconds = (clock.seconds || 0) * 1000;
-        return total + hours + minutes + seconds;
-      }, 0);
+      return Utils.getClocksDurationMs(preset.clocks);
     } catch (error) {
       console.error("Error calculating preset duration:", error);
       return null;
     }
   },
 
-  loadPresets() {
+  async loadPresets() {
     try {
-      const presets = Storage.getPresets();
+      const [presets, { selectedPresetId }] = await Promise.all([
+        Storage.getPresets(),
+        chrome.storage.local.get("selectedPresetId"),
+      ]);
+      this.presets = presets;
       const presetSelect = ELEMENTS.timer.presetSelect;
 
       presetSelect.innerHTML = '<option value="">Select preset</option>';
 
-      presets.forEach((preset) => {
+      this.presets.forEach((preset) => {
         const option = document.createElement("option");
         option.value = preset.id;
         option.textContent = preset.name;
         presetSelect.appendChild(option);
       });
+
+      if (this.presets.some((preset) => preset.id === selectedPresetId)) {
+        presetSelect.value = selectedPresetId;
+      } else if (selectedPresetId) {
+        // The stored preset was deleted, possibly on another synced device.
+        await chrome.storage.local.remove("selectedPresetId");
+      }
     } catch (error) {
       console.error("Error loading presets:", error);
     }
-  },
-
-  restoreSelectedPreset() {
-    try {
-      chrome.storage.local.get(["selectedPresetId"], (result) => {
-        if (result.selectedPresetId && ELEMENTS.timer.presetSelect) {
-          ELEMENTS.timer.presetSelect.value = result.selectedPresetId;
-        }
-      });
-    } catch (error) {
-      console.error("Error restoring selected preset:", error);
-    }
+    this.updateStartButtonState();
   },
 
   restoreTimerState() {
     chrome.storage.local.get(
-      [
-        "isRunning",
-        "endTime",
-        "totalDuration",
-        "timerProgress",
-        "clocks",
-        "selectedPresetId",
-      ],
+      ["isRunning", "endTime", "totalDuration", "clocks"],
       (result) => {
         if (result.isRunning && result.endTime) {
           this.endTime = result.endTime;
           this.totalDuration = result.totalDuration;
-          this.updateCountdown();
-          this.timer = setInterval(() => this.updateCountdown(), 1000);
+          this.startCountdownUpdate();
           this.updateToggleButton(true);
 
           // Redraw points if timer is running and we have clocks data
           if (result.clocks) {
             this.drawPresetPoints(result.clocks);
           }
-        } else if (result.timerProgress !== undefined) {
-          this.updateCircleProgress(result.timerProgress);
-          this.updateToggleButton(false);
+        } else {
+          this.showIdleState();
         }
       }
     );
   },
 
-  startTimer(duration) {
+  // Resolves once the service worker confirms the command. Rejects when it
+  // can't be reached, reports a failure, or answers without a response.
+  sendTimerCommand(message) {
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else if (!response?.success) {
+          reject(new Error(response?.error || "No response from the service worker"));
+        } else {
+          resolve(response);
+        }
+      });
+    });
+  },
+
+  showCommandError(action, error) {
+    console.error(`${action} failed:`, error);
+    this.showTimerMessage(
+      "Couldn't reach the timer. Close and reopen this popup, then try again.",
+      { isError: true }
+    );
+  },
+
+  async startTimer(duration) {
     const selectedPresetId = ELEMENTS.timer.presetSelect.value;
-    const presets = Storage.getPresets();
-    const preset = presets.find((p) => p.id === selectedPresetId);
+    const preset = this.presets.find((p) => p.id === selectedPresetId);
 
     if (!preset) return;
 
-    // Draw points on the circle when the timer starts
-    this.drawPresetPoints(preset.clocks);
-
-    // Send message to background script to start timer
-    chrome.runtime.sendMessage(
-      {
+    try {
+      await this.sendTimerCommand({
         action: "startTimer",
         duration: duration,
         presetName: preset.name,
         clocks: preset.clocks,
-      },
-      (response) => {
-        if (response.success) {
-          this.updateToggleButton(true);
-          this.startCountdownUpdate();
-        }
-      }
+      });
+    } catch (error) {
+      this.showCommandError("startTimer", error);
+      return;
+    }
+
+    // Draw points on the circle when the timer starts
+    this.drawPresetPoints(preset.clocks);
+    this.updateToggleButton(true);
+    this.startCountdownUpdate();
+  },
+
+  createSvgElement(tag, attributes) {
+    const element = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    Object.entries(attributes).forEach(([name, value]) =>
+      element.setAttribute(name, value)
     );
+    return element;
+  },
+
+  clearPresetPoints() {
+    ELEMENTS.timer.presetPoints.replaceChildren();
+  },
+
+  // Places a label outside the ring, anchored on the side facing away from it.
+  layoutPointLabel(text, angle, center, radius) {
+    const { OFFSET, CHARACTER_WIDTH, HEIGHT, GAP } = CONFIG.POINT_LABEL;
+    const x = center.x + (radius + OFFSET) * Math.sin(angle);
+    const y = center.y - (radius + OFFSET) * Math.cos(angle);
+    const horizontalDirection = Math.sin(angle);
+    let anchor = "middle";
+    if (horizontalDirection > 0.3) anchor = "start";
+    if (horizontalDirection < -0.3) anchor = "end";
+
+    // Estimated rather than measured, so it also works while the tab is hidden.
+    const width = text.length * CHARACTER_WIDTH;
+    const anchorShift = { start: 0, middle: width / 2, end: width }[anchor];
+    const box = {
+      left: x - anchorShift - GAP,
+      right: x - anchorShift + width + GAP,
+      top: y - HEIGHT / 2 - GAP,
+      bottom: y + HEIGHT / 2 + GAP,
+    };
+
+    const element = this.createSvgElement("text", {
+      class: "preset-point-label",
+      x,
+      y,
+      "text-anchor": anchor,
+    });
+    element.textContent = text;
+    return { element, box };
   },
 
   drawPresetPoints(clocks) {
+    this.clearPresetPoints();
     const circle = ELEMENTS.timer.progressBar;
-    if (!circle) return;
-
-    const svgNamespace = "http://www.w3.org/2000/svg";
-    const centerX = circle.cx.baseVal.value;
-    const centerY = circle.cy.baseVal.value;
+    const center = { x: circle.cx.baseVal.value, y: circle.cy.baseVal.value };
     const radius = circle.r.baseVal.value;
+    const totalDuration = Utils.getClocksDurationMs(clocks);
+    if (totalDuration <= 0) return;
 
-    // Clear existing points and labels
-    const existingElements = document.querySelectorAll(
-      ".preset-point, .preset-point-label"
-    );
-    existingElements.forEach((element) => element.remove());
-
-    // Calculate total duration
-    const totalDuration = clocks.reduce((total, clock) => {
-      const clockMs =
-        (clock.hours * 3600 + clock.minutes * 60 + clock.seconds) * 1000;
-      return total + clockMs;
-    }, 0);
-
+    const placedLabelBoxes = [];
     let accumulatedTime = 0;
 
     clocks.forEach((clock) => {
-      // Add current clock duration to accumulated time
-      const clockMs =
-        (clock.hours * 3600 + clock.minutes * 60 + clock.seconds) * 1000;
-      accumulatedTime += clockMs;
+      accumulatedTime += Utils.getSegmentDurationMs(clock);
+      // The last segment ends where the ring starts, so it gets no marker.
+      if (accumulatedTime >= totalDuration) return;
 
-      // Calculate position based on accumulated time
-      const position = accumulatedTime / totalDuration;
-
-      // Calculate angle (start from top and go clockwise)
-      const angle = -position * 2 * Math.PI;
-
-      // Create point
-      const point = document.createElementNS(svgNamespace, "circle");
-      const pointX = centerX + radius * Math.cos(angle);
-      const pointY = centerY + radius * Math.sin(angle);
-
-      point.setAttribute("class", "preset-point");
-      point.setAttribute("cx", pointX);
-      point.setAttribute("cy", pointY);
-      point.setAttribute("r", 5);
-      point.setAttribute("fill", "rgb(234 179 8)");
-
-      // Create label with foreignObject for better text handling
-      const foreignObject = document.createElementNS(
-        svgNamespace,
-        "foreignObject"
+      // Clockwise from 12 o'clock: where the arc's edge is when this segment ends.
+      const angle = (accumulatedTime / totalDuration) * 2 * Math.PI;
+      ELEMENTS.timer.presetPoints.append(
+        this.createSvgElement("circle", {
+          class: "preset-point",
+          cx: center.x + radius * Math.sin(angle),
+          cy: center.y - radius * Math.cos(angle),
+          r: 5,
+        })
       );
-      const labelRadius = radius + 25;
-      const labelX = centerX + labelRadius * Math.cos(angle);
-      const labelY = centerY + labelRadius * Math.sin(angle);
 
-      // Calculate accumulated hours, minutes and seconds for the label
-      const totalHours = Math.floor(accumulatedTime / (1000 * 60 * 60));
-      const totalMinutes = Math.floor(
-        (accumulatedTime % (1000 * 60 * 60)) / (1000 * 60)
+      const label = this.layoutPointLabel(
+        Utils.formatDuration(accumulatedTime),
+        angle,
+        center,
+        radius
       );
-      const totalSeconds = Math.floor((accumulatedTime % (1000 * 60)) / 1000);
-      const timeText = `${Utils.padNumber(totalHours)}:${Utils.padNumber(
-        totalMinutes
-      )}:${Utils.padNumber(totalSeconds)}`;
-
-      // Calculate label width and height
-      const labelWidth = 20;
-      const labelHeight = 60;
-
-      // Position foreignObject
-      foreignObject.setAttribute("x", labelX - labelWidth / 2);
-      foreignObject.setAttribute("y", labelY - labelHeight / 2);
-      foreignObject.setAttribute("width", labelWidth);
-      foreignObject.setAttribute("height", labelHeight);
-
-      // Create div inside foreignObject for the text
-      const div = document.createElement("div");
-      div.classList.add("preset-point-label");
-      div.textContent = timeText;
-
-      foreignObject.appendChild(div);
-
-      // Add elements to SVG
-      circle.parentNode.appendChild(point);
-      circle.parentNode.appendChild(foreignObject);
+      // On short stages the marker stays but a label that would overlap is skipped.
+      if (placedLabelBoxes.some((box) => Utils.boxesOverlap(box, label.box))) {
+        return;
+      }
+      placedLabelBoxes.push(label.box);
+      ELEMENTS.timer.presetPoints.append(label.element);
     });
   },
 
-  stopTimer() {
-    // Send message to background script to stop timer
-    chrome.runtime.sendMessage(
-      {
-        action: "stopTimer",
-      },
-      (response) => {
-        if (response.success) {
-          clearInterval(this.timer);
-          this.timer = null;
-          ELEMENTS.timer.countdownDisplay.textContent = "00:00";
-          this.updateCircleProgress(0);
-          this.updateToggleButton(false);
+  async stopTimer() {
+    try {
+      await this.sendTimerCommand({ action: "stopTimer" });
+    } catch (error) {
+      this.showCommandError("stopTimer", error);
+      return;
+    }
 
-          // Remove all preset points
-          const existingPoints = document.querySelectorAll(
-            ".preset-point, .preset-point-label"
-          );
-          existingPoints.forEach((point) => point.remove());
+    this.showIdleState();
+  },
 
-          if (ELEMENTS.timer.presetSelect) {
-            ELEMENTS.timer.presetSelect.value = "";
-          }
-        }
-      }
-    );
+  showIdleState() {
+    this.stopCountdownUpdate();
+    ELEMENTS.timer.countdownDisplay.textContent = Utils.formatDuration(0);
+    this.updateCircleProgress(0);
+    this.updateToggleButton(false);
+    this.clearPresetPoints();
   },
 
   startCountdownUpdate() {
+    this.stopCountdownUpdate();
     this.updateCountdown();
-    this.timer = setInterval(() => this.updateCountdown(), 1000);
+    this.countdownIntervalId = setInterval(
+      () => this.updateCountdown(),
+      CONFIG.UPDATE_INTERVAL
+    );
+  },
+
+  stopCountdownUpdate() {
+    clearInterval(this.countdownIntervalId);
+    this.countdownIntervalId = null;
   },
 
   updateCountdown() {
     chrome.storage.local.get(
       ["endTime", "totalDuration", "clocks"],
       (result) => {
-        if (!result.endTime) return;
+        const timeLeft = result.endTime ? result.endTime - Date.now() : 0;
 
-        const now = Date.now();
-        const timeLeft = result.endTime - now;
-
+        // Only the view changes here. The service worker's countdown alarm
+        // completes the run; sending stopTimer would cancel its notification.
         if (timeLeft <= 0) {
-          this.stopTimer();
+          this.showIdleState();
           return;
         }
 
-        const hours = Math.floor(timeLeft / (1000 * 60 * 60));
-        const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
-
-        ELEMENTS.timer.countdownDisplay.textContent = `${Utils.padNumber(
-          hours
-        )}:${Utils.padNumber(minutes)}:${Utils.padNumber(seconds)}`;
-
-        const progress = (timeLeft / result.totalDuration) * 100;
-
-        this.updateCircleProgress(progress);
+        ELEMENTS.timer.countdownDisplay.textContent = Utils.formatDuration(timeLeft);
+        this.updateCircleProgress(timeLeft / result.totalDuration);
       }
     );
   },
 
-  updateCircleProgress(percentage) {
+  updateCircleProgress(remainingFraction) {
     const circle = ELEMENTS.timer.progressBar;
     if (!circle) return;
 
-    const radius = circle.r.baseVal.value;
-    const circumference = radius * 2 * Math.PI;
-    const offset = circumference - (percentage / 100) * circumference;
-
+    const circumference = 2 * Math.PI * circle.r.baseVal.value;
+    const isEmpty = remainingFraction <= 0;
+    circle.classList.toggle("is-empty", isEmpty);
     circle.style.strokeDasharray = `${circumference} ${circumference}`;
-    circle.style.strokeDashoffset = offset;
-
-    // Store the progress state
-    chrome.storage.local.set({ timerProgress: percentage });
+    // The path starts at 12 o'clock and runs clockwise. A negative offset hides
+    // the elapsed part, so the remaining arc is used up clockwise. An empty
+    // ring is hidden (a round cap would leave a dot) and reset to full, so the
+    // next run doesn't animate in from the wrong side.
+    circle.style.strokeDashoffset = isEmpty
+      ? 0
+      : -(1 - remainingFraction) * circumference;
   },
 
   toggleTimer() {
     chrome.storage.local.get(["isRunning", "endTime"], (result) => {
-      if (result.isRunning) {
+      // Past its end time a run is finished, even if its alarm hasn't fired yet.
+      if (result.isRunning && result.endTime > Date.now()) {
         this.stopTimer();
       } else {
         const selectedPresetId = ELEMENTS.timer.presetSelect.value;
-        if (!selectedPresetId) {
-          console.error("No preset selected");
-          return;
-        }
-
-        const duration = this.getPresetDuration(selectedPresetId);
+        const duration =
+          selectedPresetId && this.getPresetDuration(selectedPresetId);
+        // Start is disabled in these cases; this covers a click that raced a change.
         if (!duration) {
-          console.error("Invalid preset duration");
+          this.updateStartButtonState();
           return;
         }
 
@@ -500,14 +704,86 @@ const TimerManager = {
   updateToggleButton(isRunning) {
     const button = ELEMENTS.timer.toggleButton;
     if (!button) return;
+    this.isRunning = isRunning;
     button.textContent = isRunning ? "Stop" : "Start";
+    this.updateStartButtonState();
+  },
+
+  selectPreset(presetId) {
+    ELEMENTS.timer.presetSelect.value = presetId;
+    chrome.storage.local.set({ selectedPresetId: presetId });
+    this.updateStartButtonState();
+  },
+
+  showTimerMessage(text, { isError = false } = {}) {
+    ELEMENTS.timer.message.textContent = text;
+    ELEMENTS.timer.message.classList.toggle("error", isError);
+  },
+
+  // Start needs a selected preset with a duration. Stop is always available.
+  updateStartButtonState() {
+    const button = ELEMENTS.timer.toggleButton;
+    if (this.isRunning) {
+      button.disabled = false;
+      this.showTimerMessage("");
+      return;
+    }
+
+    const selectedPresetId = ELEMENTS.timer.presetSelect.value;
+    if (this.presets.length === 0) {
+      button.disabled = true;
+      this.showTimerMessage("Create a preset on the Presets tab to start.");
+    } else if (!selectedPresetId) {
+      button.disabled = true;
+      this.showTimerMessage("Select a preset to start.");
+    } else if (!this.getPresetDuration(selectedPresetId)) {
+      button.disabled = true;
+      this.showTimerMessage("This preset has no duration. Select another one.", {
+        isError: true,
+      });
+    } else {
+      button.disabled = false;
+      this.showTimerMessage("");
+    }
   },
 };
 
 // Preset Form Management with improved validation and error handling
 const PresetFormManager = {
+  showMessage(text) {
+    ELEMENTS.preset.message.textContent = text;
+  },
+
+  getFieldInputs(field) {
+    const { name, hours, minutes, seconds } = ELEMENTS.preset.inputs;
+    const inputsByField = {
+      name: [name],
+      segment: [hours, minutes, seconds],
+      segments: [],
+    };
+    return inputsByField[field];
+  },
+
+  showFieldError(field, text) {
+    ELEMENTS.preset.errors[field].textContent = text;
+    this.getFieldInputs(field).forEach((input) => {
+      if (text) {
+        input.setAttribute("aria-invalid", "true");
+      } else {
+        input.removeAttribute("aria-invalid");
+      }
+    });
+  },
+
+  clearFieldErrors() {
+    Object.keys(ELEMENTS.preset.errors).forEach((field) =>
+      this.showFieldError(field, "")
+    );
+  },
+
   clearClocksList() {
     ELEMENTS.preset.list.innerHTML = "";
+    ELEMENTS.preset.segmentsStatus.textContent = "";
   },
 
   clearForm() {
@@ -532,33 +808,42 @@ const PresetFormManager = {
     ELEMENTS.preset.form.style.display = "none";
     ELEMENTS.preset.header.style.display = "block";
     this.clearForm();
+    this.clearFieldErrors();
   },
 
-  savePreset() {
+  async savePreset() {
     try {
       const presetName = ELEMENTS.preset.inputs.name.value.trim();
-      if (!presetName) {
-        console.error("Preset name is required");
-        return;
-      }
-
       const clockItems = Array.from(
         ELEMENTS.preset.list.querySelectorAll(".preset-item")
       );
-      if (clockItems.length === 0) {
-        console.error("Add at least one clock to the preset");
+
+      let nameError = "";
+      if (!presetName) {
+        nameError = "Enter a preset name.";
+      } else if (presetName.length > CONFIG.MAX_PRESET_NAME_LENGTH) {
+        nameError = `Use at most ${CONFIG.MAX_PRESET_NAME_LENGTH} characters.`;
+      }
+      const segmentsError =
+        clockItems.length === 0 ? "Add at least one segment." : "";
+
+      this.showFieldError("name", nameError);
+      this.showFieldError("segments", segmentsError);
+      if (nameError) {
+        ELEMENTS.preset.inputs.name.focus();
+        return;
+      }
+      if (segmentsError) {
+        ELEMENTS.preset.inputs.hours.focus();
         return;
       }
 
-      const clocks = clockItems.map((item, index) => {
-        const timeItems = item.querySelectorAll(".preset-clock-item");
-        return {
-          position: index,
-          hours: parseInt(timeItems[0].textContent) || 0,
-          minutes: parseInt(timeItems[1].textContent) || 0,
-          seconds: parseInt(timeItems[2].textContent) || 0,
-        };
-      });
+      const clocks = clockItems.map((item, index) => ({
+        position: index,
+        hours: Number(item.dataset.hours),
+        minutes: Number(item.dataset.minutes),
+        seconds: Number(item.dataset.seconds),
+      }));
 
       const preset = {
         id: Utils.generateUUID(),
@@ -567,73 +852,196 @@ const PresetFormManager = {
         createdAt: Date.now(),
       };
 
-      Storage.savePreset(preset);
+      await Storage.savePreset(preset);
+      this.showMessage("");
       this.hideForm();
-      this.loadSavedPresets();
-      TimerManager.loadPresets();
+      await this.loadSavedPresets();
+      await TimerManager.loadPresets();
     } catch (error) {
       console.error("Error saving preset:", error);
+      this.showMessage("Couldn't save the preset. Try again.");
     }
   },
 
-  validatePreset(preset) {
-    return (
-      preset.name &&
-      Utils.validateTimeInput(preset.hours) &&
-      Utils.validateTimeInput(preset.minutes) &&
-      Utils.validateTimeInput(preset.seconds)
-    );
-  },
-
-  limitInputLength(input) {
-    input.value = input.value.replace(/[^\d]/g, "");
-
-    if (input.value.length > 2) {
-      input.value.slice(0, 2);
-    }
-
-    const numValue = parseInt(input.value);
-    if (numValue > CONFIG.MAX_TIME_VALUE) {
-      input.value = String(CONFIG.MAX_TIME_VALUE);
-    }
+  limitInputLength(input, field) {
+    const digits = input.value.replace(/\D/g, "").slice(0, 2);
+    const { max } = CONFIG.SEGMENT_FIELD_LIMITS[field];
+    input.value = digits === "" ? "" : String(Math.min(Number(digits), max));
   },
 
   createPresetItem(hours, minutes, seconds) {
-    const presetItem = Utils.createElementWithClass("div", "preset-item");
+    const presetItem = Utils.createElementWithClass("li", "preset-item");
     presetItem.draggable = true;
-    presetItem.innerHTML = `
-      <div class="preset-clock-item">${Utils.padNumber(hours)}</div>:
-      <div class="preset-clock-item">${Utils.padNumber(minutes)}</div>:
-      <div class="preset-clock-item">${Utils.padNumber(seconds)}</div>
-      <button class="preset-remove-btn">×</button>
-    `;
+    Object.assign(presetItem.dataset, { hours, minutes, seconds });
+
+    [hours, minutes, seconds].forEach((value, index) => {
+      if (index > 0) presetItem.append(":");
+      const timeItem = Utils.createElementWithClass("div", "preset-clock-item");
+      timeItem.textContent = Utils.padNumber(value);
+      presetItem.append(timeItem);
+    });
+
+    const actions = Utils.createElementWithClass("div", "preset-item-actions");
+    [
+      ["up", "↑"],
+      ["down", "↓"],
+    ].forEach(([direction, arrow]) => {
+      const moveButton = Utils.createElementWithClass("button", "preset-move-btn");
+      moveButton.type = "button";
+      moveButton.dataset.direction = direction;
+      moveButton.textContent = arrow;
+      actions.append(moveButton);
+    });
+
+    const removeButton = Utils.createElementWithClass("button", "preset-remove-btn");
+    removeButton.type = "button";
+    removeButton.textContent = "×";
+    actions.append(removeButton);
+    presetItem.append(actions);
     return presetItem;
   },
 
-  addClockToPresetsList() {
-    const hours = ELEMENTS.preset.inputs.hours.value || "0";
-    const minutes = ELEMENTS.preset.inputs.minutes.value || "0";
-    const seconds = ELEMENTS.preset.inputs.seconds.value || "0";
+  getSegmentDurationText(item) {
+    const { hours, minutes, seconds } = item.dataset;
+    return [hours, minutes, seconds].map((value) => Utils.padNumber(value)).join(":");
+  },
 
-    const presetItem = this.createPresetItem(hours, minutes, seconds);
+  // Labels name the segment's position, so they change whenever the order does.
+  updateSegmentControls() {
+    const items = [...ELEMENTS.preset.list.querySelectorAll(".preset-item")];
+    const setLabel = (button, label) => {
+      button.setAttribute("aria-label", label);
+      button.title = label;
+    };
+
+    items.forEach((item, index) => {
+      const position = index + 1;
+      const [moveUpButton, moveDownButton] = item.querySelectorAll(".preset-move-btn");
+      setLabel(moveUpButton, `Move segment ${position} up`);
+      setLabel(moveDownButton, `Move segment ${position} down`);
+      moveUpButton.disabled = index === 0;
+      moveDownButton.disabled = index === items.length - 1;
+      setLabel(
+        item.querySelector(".preset-remove-btn"),
+        `Remove segment ${position} (${this.getSegmentDurationText(item)})`
+      );
+    });
+  },
+
+  moveSegment(item, direction) {
+    // Moving the neighbour rather than the item keeps the focused button in the DOM.
+    if (direction === "up" && item.previousElementSibling) {
+      item.after(item.previousElementSibling);
+    } else if (direction === "down" && item.nextElementSibling) {
+      item.before(item.nextElementSibling);
+    } else {
+      return;
+    }
+    this.updateSegmentControls();
+
+    // At either end the pressed button becomes disabled; keep focus on the row.
+    if (item.querySelector(`[data-direction="${direction}"]`).disabled) {
+      const otherDirection = direction === "up" ? "down" : "up";
+      item.querySelector(`[data-direction="${otherDirection}"]`).focus();
+    }
+
+    const items = [...ELEMENTS.preset.list.querySelectorAll(".preset-item")];
+    ELEMENTS.preset.segmentsStatus.textContent = `Segment ${this.getSegmentDurationText(
+      item
+    )} moved to position ${items.indexOf(item) + 1} of ${items.length}.`;
+  },
+
+  readSegmentInputs() {
+    const { hours, minutes, seconds } = ELEMENTS.preset.inputs;
+    return {
+      hours: Number(hours.value) || 0,
+      minutes: Number(minutes.value) || 0,
+      seconds: Number(seconds.value) || 0,
+    };
+  },
+
+  validateSegment(segment) {
+    for (const [field, { min, max, label }] of Object.entries(
+      CONFIG.SEGMENT_FIELD_LIMITS
+    )) {
+      const value = segment[field];
+      if (!Number.isInteger(value) || value < min || value > max) {
+        return `${label} must be between ${min} and ${max}.`;
+      }
+    }
+
+    const { hours, minutes, seconds } = segment;
+    const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+    if (totalSeconds === 0) {
+      return "Enter a duration longer than 00:00:00.";
+    }
+    if (totalSeconds < CONFIG.MIN_SEGMENT_SECONDS) {
+      return `Each segment must be at least ${CONFIG.MIN_SEGMENT_SECONDS} seconds long.`;
+    }
+    return "";
+  },
+
+  addClockToPresetsList() {
+    const segmentCount = ELEMENTS.preset.list.querySelectorAll(".preset-item").length;
+    if (segmentCount >= CONFIG.MAX_SEGMENTS_PER_PRESET) {
+      this.showFieldError(
+        "segments",
+        `A preset can have at most ${CONFIG.MAX_SEGMENTS_PER_PRESET} segments.`
+      );
+      return;
+    }
+
+    const segment = this.readSegmentInputs();
+    const segmentError = this.validateSegment(segment);
+    if (segmentError) {
+      this.showFieldError("segment", segmentError);
+      return;
+    }
+
+    const presetItem = this.createPresetItem(
+      segment.hours,
+      segment.minutes,
+      segment.seconds
+    );
     ELEMENTS.preset.list.appendChild(presetItem);
 
     this.clearClocks();
-    this.initializeDragAndDrop(presetItem);
+    this.initializeSegmentItem(presetItem);
+    this.updateSegmentControls();
+    this.showFieldError("segment", "");
+    this.showFieldError("segments", "");
   },
 
-  initializeDragAndDrop(item) {
+  initializeSegmentItem(item) {
     const dragEvents = {
       dragstart: (e) => e.target.classList.add("dragging"),
-      dragend: (e) => e.target.classList.remove("dragging"),
+      dragend: (e) => {
+        e.target.classList.remove("dragging");
+        this.updateSegmentControls();
+      },
     };
 
     Object.entries(dragEvents).forEach(([event, handler]) => {
       item.addEventListener(event, handler);
     });
 
+    item.querySelectorAll(".preset-move-btn").forEach((moveButton) => {
+      moveButton.addEventListener("click", () =>
+        this.moveSegment(item, moveButton.dataset.direction)
+      );
+    });
+
     const removeBtn = item.querySelector(".preset-remove-btn");
-    removeBtn.addEventListener("click", () => item.remove());
+    removeBtn.addEventListener("click", () => {
+      // The button disappears with its row, so focus the neighbouring row's.
+      const neighbour = item.nextElementSibling || item.previousElementSibling;
+      const nextFocus = neighbour
+        ? neighbour.querySelector(".preset-remove-btn")
+        : ELEMENTS.preset.inputs.hours;
+      item.remove();
+      this.updateSegmentControls();
+      nextFocus.focus();
+    });
   },
 
   initializePresetsList() {
@@ -655,66 +1063,88 @@ const PresetFormManager = {
   },
 
   initializeInputLimits() {
-    const clockInputs = [
-      ELEMENTS.preset.inputs.hours,
-      ELEMENTS.preset.inputs.minutes,
-      ELEMENTS.preset.inputs.seconds,
-    ];
+    ELEMENTS.preset.inputs.name.maxLength = CONFIG.MAX_PRESET_NAME_LENGTH;
+    ELEMENTS.preset.inputs.name.addEventListener("input", () =>
+      this.showFieldError("name", "")
+    );
 
-    clockInputs.forEach((input) => {
+    Object.entries(CONFIG.SEGMENT_FIELD_LIMITS).forEach(([field, { min, max }]) => {
+      const input = ELEMENTS.preset.inputs[field];
       if (!input) return;
 
+      input.min = String(min);
+      input.max = String(max);
+
+      // Number inputs accept these, but they would blank the value.
       input.addEventListener("keypress", (e) => {
-        if ([".", ","].includes(e.key)) e.preventDefault();
+        if ([".", ",", "e", "E", "+", "-"].includes(e.key)) e.preventDefault();
       });
 
-      input.addEventListener("input", () => this.limitInputLength(input));
+      input.addEventListener("input", () => {
+        this.limitInputLength(input, field);
+        this.showFieldError("segment", "");
+      });
     });
   },
 
-  loadSavedPresets() {
+  async loadSavedPresets() {
     try {
       const presetsList = document.querySelector(".saved-presets-list");
-      const presets = Storage.getPresets();
+      const presets = await Storage.getPresets();
 
       presetsList.innerHTML = "";
 
       presets.forEach((preset) => {
-        const presetItem = document.createElement("div");
+        const presetItem = document.createElement("li");
         presetItem.className = "saved-preset-item";
         presetItem.dataset.presetId = preset.id;
 
-        const nameSpan = document.createElement("span");
-        nameSpan.className = "saved-preset-name";
-        nameSpan.textContent = preset.name;
+        const selectButton = document.createElement("button");
+        selectButton.type = "button";
+        selectButton.className = "saved-preset-name";
+        selectButton.textContent = preset.name;
+        selectButton.title = "Select on the Timer tab";
+        selectButton.addEventListener("click", () =>
+          this.openOnTimerTab(preset.id)
+        );
 
         const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
         deleteButton.className = "saved-preset-delete";
-        deleteButton.innerHTML = "×";
-        deleteButton.title = "Delete preset";
+        deleteButton.textContent = "×";
+        deleteButton.setAttribute("aria-label", `Delete preset ${preset.name}`);
+        deleteButton.title = deleteButton.getAttribute("aria-label");
 
         deleteButton.addEventListener("click", () => {
           this.deletePreset(preset.id);
         });
 
-        presetItem.appendChild(nameSpan);
+        presetItem.appendChild(selectButton);
         presetItem.appendChild(deleteButton);
         presetsList.appendChild(presetItem);
       });
     } catch (error) {
       console.error("Error loading saved presets:", error);
+      this.showMessage("Couldn't load your presets. Reopen the popup to try again.");
     }
   },
 
-  deletePreset(presetId) {
+  openOnTimerTab(presetId) {
+    TimerManager.selectPreset(presetId);
+    TabManager.switchTab("timer");
+    // The clicked button is now hidden, so move focus somewhere useful.
+    ELEMENTS.timer.presetSelect.focus();
+  },
+
+  async deletePreset(presetId) {
     try {
-      const presets = Storage.getPresets();
-      const updatedPresets = presets.filter((p) => p.id !== presetId);
-      Storage.set(CONFIG.STORAGE_KEYS.PRESETS, updatedPresets);
-      this.loadSavedPresets();
-      TimerManager.loadPresets();
+      await Storage.deletePreset(presetId);
+      this.showMessage("");
+      await this.loadSavedPresets();
+      await TimerManager.loadPresets();
     } catch (error) {
       console.error("Error deleting preset:", error);
+      this.showMessage("Couldn't delete the preset. Try again.");
     }
   },
 
@@ -727,18 +1157,13 @@ const PresetFormManager = {
     }
 
     this.initializePresetsList();
-    this.loadSavedPresets();
   },
 };
 
 // Initialize Application with error handling
-const initializeApp = () => {
+const initializeApp = async () => {
   try {
     TabManager.initializeTabs();
-    ClockManager.startClockUpdate();
-    TimerManager.loadPresets();
-    TimerManager.restoreSelectedPreset();
-    TimerManager.restoreTimerState();
 
     // Toggle time format
     ELEMENTS.timer.clock.addEventListener("click", () => {
@@ -752,7 +1177,7 @@ const initializeApp = () => {
 
     // Save selected preset when changed
     ELEMENTS.timer.presetSelect?.addEventListener("change", (e) => {
-      chrome.storage.local.set({ selectedPresetId: e.target.value });
+      TimerManager.selectPreset(e.target.value);
     });
 
     // Preset form event listeners
@@ -768,6 +1193,21 @@ const initializeApp = () => {
 
     PresetFormManager.initializeInputLimits();
     PresetFormManager.initializeEventListeners();
+
+    // Presets and settings have to be in chrome.storage before anything reads them.
+    try {
+      await LegacyMigration.run();
+    } catch (error) {
+      console.error("Error migrating presets from localStorage:", error);
+      PresetFormManager.showMessage(
+        "Couldn't move your presets from the previous version. They're still on this device; reopen the popup to try again."
+      );
+    }
+
+    await ClockManager.startClockUpdate();
+    await PresetFormManager.loadSavedPresets();
+    await TimerManager.loadPresets();
+    TimerManager.restoreTimerState();
   } catch (error) {
     console.error("Error initializing app:", error);
   }

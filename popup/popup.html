@@ -3,76 +3,86 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Popup</title>
+    <title>TickTockFocus</title>
     <link rel="stylesheet" href="popup.css">
 </head>
 <body>
     <main class="container">
       <header class="header panel">
-        <nav class="tab-container">
-          <div class="tab" data-tab="timer">Timer</div>
-          <div class="tab" data-tab="presets">Presets</div>
-          <div class="tab" data-tab="usage">Usage</div>
-        </nav>
-        <div class="clock" id="clock">
-          00:00
+        <div class="tab-container" role="tablist" aria-label="Sections">
+          <button type="button" class="tab" role="tab" id="tab_timer" data-tab="timer" aria-controls="panel_timer" aria-selected="true">Timer</button>
+          <button type="button" class="tab" role="tab" id="tab_presets" data-tab="presets" aria-controls="panel_presets" aria-selected="false" tabindex="-1">Presets</button>
+          <button type="button" class="tab" role="tab" id="tab_usage" data-tab="usage" aria-controls="panel_usage" aria-selected="false" tabindex="-1">Usage</button>
         </div>
+        <button type="button" class="clock" id="clock" title="Switch between 12-hour and 24-hour time">00:00</button>
       </header>
       <div class="content panel">
-        <div class="tab-content" data-tab="timer">
+        <div class="tab-content" id="panel_timer" data-tab="timer" role="tabpanel" aria-labelledby="tab_timer">
           <div class="timer-circle">
-            <svg class="timer-progress" width="250" height="300">
-              <circle class="timer-progress-bg" cx="125" cy="150" r="90" fill="none"/>
-              <circle class="timer-progress-bar" cx="125" cy="150" r="90" fill="none"/>
+            <svg class="timer-progress" viewBox="0 0 320 250" width="320" height="250" aria-hidden="true">
+              <circle class="timer-progress-bg" cx="160" cy="125" r="90" fill="none"/>
+              <circle class="timer-progress-bar is-empty" cx="160" cy="125" r="90" fill="none" transform="rotate(-90 160 125)"/>
+              <g class="preset-points"></g>
             </svg>
             <div class="timer-display">
-              <p class="countdown" id="countdown">00:00</p>
+              <p class="countdown" id="countdown">00:00:00</p>
             </div>
           </div>
           <div class="timer-controls">
-            <select id="preset_select" class="preset-select">
+            <label for="preset_select" class="visually-hidden">Preset</label>
+            <select id="preset_select" class="preset-select" aria-describedby="timer_message">
               <option value="">Select preset</option>
             </select>
-            <button id="timer_toggle" class="button">Start</button>
+            <button id="timer_toggle" class="button" disabled>Start</button>
+            <p id="timer_message" class="form-message" aria-live="polite"></p>
           </div>
         </div>
-        <div class="tab-content" data-tab="presets">
+        <div class="tab-content" id="panel_presets" data-tab="presets" role="tabpanel" aria-labelledby="tab_presets" hidden>
           <header class="preset-header">
             <button class="button" id="create_preset">Create preset</button>
           </header>
           <form id="preset_form" class="preset-form">
             <div class="preset-container">
-              <input type="text" class="input" id="preset_name" placeholder="Preset name" required autocomplete="off">
-              <div class="clock-settings">
-                <div class="clock-input-container">
-                  <data class="clock-input-wrapper">
-                    <input type="number" class="input clock-input" id="preset_hours" placeholder="00" min="0" max="60">
-                    <p class="clock-input-label">H</p>
-                  </data>:
-                  <data class="clock-input-wrapper">
-                    <input type="number" class="input clock-input" id="preset_minutes" placeholder="00" min="0" max="60">
-                    <p class="clock-input-label">M</p>
-                  </data>:
-                  <div class="clock-input-wrapper">
-                    <input type="number" class="input clock-input" id="preset_seconds" placeholder="00" min="1" max="60">
-                    <p class="clock-input-label">S</p>
+              <div class="form-field">
+                <label for="preset_name" class="input-label">Preset name</label>
+                <input type="text" class="input" id="preset_name" placeholder="e.g. Pomodoro" required autocomplete="off" aria-describedby="preset_name_error">
+                <p id="preset_name_error" class="form-message error" aria-live="polite"></p>
+              </div>
+              <div class="form-field">
+                <div class="clock-settings">
+                  <div class="clock-input-container" role="group" aria-label="Segment duration">
+                    <div class="clock-input-wrapper">
+                      <input type="number" class="input clock-input" id="preset_hours" placeholder="00" aria-describedby="segment_error">
+                      <label for="preset_hours" class="clock-input-label"><span aria-hidden="true">H</span><span class="visually-hidden">Hours</span></label>
+                    </div>
+                    <span aria-hidden="true">:</span>
+                    <div class="clock-input-wrapper">
+                      <input type="number" class="input clock-input" id="preset_minutes" placeholder="00" aria-describedby="segment_error">
+                      <label for="preset_minutes" class="clock-input-label"><span aria-hidden="true">M</span><span class="visually-hidden">Minutes</span></label>
+                    </div>
+                    <span aria-hidden="true">:</span>
+                    <div class="clock-input-wrapper">
+                      <input type="number" class="input clock-input" id="preset_seconds" placeholder="00" aria-describedby="segment_error">
+                      <label for="preset_seconds" class="clock-input-label"><span aria-hidden="true">S</span><span class="visually-hidden">Seconds</span></label>
+                    </div>
                   </div>
+                  <button class="button" type="button" id="add_preset_clock">Add</button>
                 </div>
-                <button class="button" type="button" id="add_preset_clock">Add</button>
+                <p id="segment_error" class="form-message error" aria-live="polite"></p>
               </div>
             </div>
-            <div class="clock-presets-list">
-              
-            </div>
+            <ol class="clock-presets-list" aria-label="Segments"></ol>
+            <p id="segments_status" class="visually-hidden" aria-live="polite"></p>
+            <p id="segments_error" class="form-message error" aria-live="polite"></p>
             <div class="buttons-group">
               <button class="button button-secondary" id="cancel_preset" type="button">Cancel</button>
               <button class="button" id="add_preset" type="button">Create</button>
             </div>
           </form>
-          <div class="saved-presets-list"></div>
+          <p id="presets_message" class="form-message error" aria-live="polite"></p>
+          <ul class="saved-presets-list"></ul>
         </div>
-        <div class="tab-content" data-tab="usage">
-          <div class="usage-container">
+        <div class="tab-content usage-container" id="panel_usage" data-tab="usage" role="tabpanel" aria-labelledby="tab_usage" tabindex="0" hidden>
             <h3>How to Use TickTockFocus</h3>
             <section class="usage-section">
               <h4>Creating Timer Presets</h4>
@@ -80,9 +90,9 @@
                 <li>Go to the <strong>Presets</strong> tab</li>
                 <li>Click <strong>Create preset</strong></li>
                 <li>Enter a name for your preset</li>
-                <li>Add clock segments by setting hours, minutes, seconds</li>
+                <li>Add clock segments by setting hours, minutes, seconds (at least 30 seconds each)</li>
                 <li>Click <strong>Add</strong> after each segment</li>
-                <li>Rearrange segments by dragging if needed</li>
+                <li>Rearrange segments by dragging or with the ↑ and ↓ buttons</li>
                 <li>Click <strong>Create</strong> to save your preset</li>
               </ol>
             </section>
@@ -102,10 +112,10 @@
                 <li>Timers continue running even if you close the popup</li>
                 <li>Click on the extension icon to check progress</li>
                 <li>Create different presets for different activities</li>
+                <li>Click a saved preset to select it on the Timer tab</li>
                 <li>Use the clock in the header to see the current time</li>
               </ul>
             </section>
-          </div>
         </div>
       </div>
     </main>

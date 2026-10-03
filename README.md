@@ -2,7 +2,7 @@
 
 TickTockFocus is a powerful Chrome extension that helps you manage your time with customizable timer presets. Perfect for productivity techniques like Pomodoro, time-boxing, or any workflow that requires structured time management.
 
-![TickTockFocus](icons/chronometer.png)
+![TickTockFocus](icons/icon512.png)
 
 ## Features
 
@@ -23,8 +23,9 @@ TickTockFocus is a powerful Chrome extension that helps you manage your time wit
 
 ### ⚙️ Customization Options
 - Create unlimited timer presets for different activities
-- Easily reorder clock segments with drag-and-drop functionality
+- Easily reorder clock segments with drag-and-drop or the ↑ and ↓ buttons
 - Toggle between 12-hour and 24-hour time formats
+- Presets and settings sync across your computers through your Google account when Chrome Sync is on
 
 ### 💾 Persistent Timer State
 - Timers continue running even if you close the popup
@@ -37,8 +38,8 @@ TickTockFocus is a powerful Chrome extension that helps you manage your time wit
 1. Click the "Presets" tab
 2. Click "Create preset"
 3. Enter a name for your preset
-4. Add clock segments by setting hours, minutes, seconds and clicking "Add"
-5. Rearrange segments by dragging them into the desired order
+4. Add clock segments (at least 30 seconds each) by setting hours, minutes, seconds and clicking "Add"
+5. Rearrange segments by dragging them or with the ↑ and ↓ buttons
 6. Click "Create" to save your preset
 
 ### Running a Timer
@@ -50,20 +51,20 @@ TickTockFocus is a powerful Chrome extension that helps you manage your time wit
 
 ### Managing Presets
 - All your saved presets appear in the "Presets" tab
-- Click on a preset to select it
+- Click a preset to select it on the Timer tab
 - Use the "×" button to delete unwanted presets
 
 ## Installation
 
 1. Download the extension from the Chrome Web Store
 2. Click "Add to Chrome"
-3. The Chronometer icon will appear in your browser toolbar
+3. The TickTockFocus icon will appear in your browser toolbar
 
 ## Privacy
 
-Chronometer respects your privacy:
-- All data is stored locally in your browser
-- No data is sent to external servers
+TickTockFocus respects your privacy:
+- Presets and settings are saved with Chrome's sync storage, so they follow your Google account when Chrome Sync is on; the running timer's state stays in your browser
+- No data is sent to the developer or to any server besides Chrome Sync
 - No tracking or analytics
 
 ## License
