@@ -237,7 +237,17 @@ const LegacyMigration = {
     return true;
   },
 
+  // v1.0 stored the ring progress every second; it is now derived from endTime.
+  async removeTimerProgress() {
+    const { timerProgress } = await chrome.storage.local.get("timerProgress");
+    if (timerProgress !== undefined) {
+      await chrome.storage.local.remove("timerProgress");
+    }
+  },
+
   async run() {
+    await this.removeTimerProgress();
+
     const { LEGACY_PRESETS, LEGACY_SETTINGS } = CONFIG.STORAGE_KEYS;
     const legacyPresets = this.readLegacyKey(LEGACY_PRESETS);
     const legacySettings = this.readLegacyKey(LEGACY_SETTINGS);
@@ -414,14 +424,7 @@ const TimerManager = {
 
   restoreTimerState() {
     chrome.storage.local.get(
-      [
-        "isRunning",
-        "endTime",
-        "totalDuration",
-        "timerProgress",
-        "clocks",
-        "selectedPresetId",
-      ],
+      ["isRunning", "endTime", "totalDuration", "clocks"],
       (result) => {
         if (result.isRunning && result.endTime) {
           this.endTime = result.endTime;
@@ -434,9 +437,8 @@ const TimerManager = {
           if (result.clocks) {
             this.drawPresetPoints(result.clocks);
           }
-        } else if (result.timerProgress !== undefined) {
-          this.updateCircleProgress(result.timerProgress);
-          this.updateToggleButton(false);
+        } else {
+          this.showIdleState();
         }
       }
     );
@@ -647,9 +649,6 @@ const TimerManager = {
 
     circle.style.strokeDasharray = `${circumference} ${circumference}`;
     circle.style.strokeDashoffset = offset;
-
-    // Store the progress state
-    chrome.storage.local.set({ timerProgress: percentage });
   },
 
   toggleTimer() {
