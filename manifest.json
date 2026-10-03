@@ -2,6 +2,7 @@
   "manifest_version": 3,
   "name": "TickTockFocus - Advanced Timer",
   "version": "1.1.0",
+  "minimum_chrome_version": "120",
   "description": "Powerful time management tool with customizable multi-stage timer presets. Perfect for Pomodoro technique and structured workflows.",
   "action": {
     "default_popup": "popup/popup.html",
