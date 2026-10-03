@@ -1167,7 +1167,7 @@ const PresetFormManager = {
 
       presetsList.innerHTML = "";
 
-      presets.forEach((preset) => {
+      presets.forEach((preset, index) => {
         const presetItem = document.createElement("li");
         presetItem.className = "saved-preset-item";
         presetItem.dataset.presetId = preset.id;
@@ -1189,7 +1189,7 @@ const PresetFormManager = {
         deleteButton.title = deleteButton.getAttribute("aria-label");
 
         deleteButton.addEventListener("click", () => {
-          this.deletePreset(preset.id);
+          this.deletePreset(preset.id, index);
         });
 
         if (preset.id === focusedPresetId) {
@@ -1219,11 +1219,24 @@ const PresetFormManager = {
     (presetSelect.disabled ? toggleButton : presetSelect).focus();
   },
 
-  async deletePreset(presetId) {
+  async deletePreset(presetId, listIndex) {
     try {
       await Storage.deletePreset(presetId);
       this.showMessage("");
       await this.loadSavedPresets();
+
+      // The deleted preset's × went with the old list; focus the × now in its place.
+      const presetItems = document.querySelectorAll(".saved-preset-item");
+      const itemInPlace = presetItems[Math.min(listIndex, presetItems.length - 1)];
+      if (itemInPlace) {
+        itemInPlace.querySelector(".saved-preset-delete").focus();
+      } else if (ELEMENTS.preset.form.style.display === "block") {
+        // The open form hides "Create preset"; its Create button is right above the list.
+        ELEMENTS.preset.addButton.focus();
+      } else {
+        ELEMENTS.preset.createButton.focus();
+      }
+
       await TimerManager.loadPresets();
     } catch (error) {
       console.error("Error deleting preset:", error);
