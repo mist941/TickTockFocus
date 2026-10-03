@@ -367,7 +367,7 @@ const ClockManager = {
 
 // Timer Management with state handling
 const TimerManager = {
-  timer: null,
+  countdownIntervalId: null,
   endTime: null,
   totalDuration: null,
   presets: [],
@@ -429,8 +429,7 @@ const TimerManager = {
         if (result.isRunning && result.endTime) {
           this.endTime = result.endTime;
           this.totalDuration = result.totalDuration;
-          this.updateCountdown();
-          this.timer = setInterval(() => this.updateCountdown(), 1000);
+          this.startCountdownUpdate();
           this.updateToggleButton(true);
 
           // Redraw points if timer is running and we have clocks data
@@ -593,8 +592,7 @@ const TimerManager = {
   },
 
   showIdleState() {
-    clearInterval(this.timer);
-    this.timer = null;
+    this.stopCountdownUpdate();
     ELEMENTS.timer.countdownDisplay.textContent = "00:00";
     this.updateCircleProgress(0);
     this.updateToggleButton(false);
@@ -607,8 +605,17 @@ const TimerManager = {
   },
 
   startCountdownUpdate() {
+    this.stopCountdownUpdate();
     this.updateCountdown();
-    this.timer = setInterval(() => this.updateCountdown(), 1000);
+    this.countdownIntervalId = setInterval(
+      () => this.updateCountdown(),
+      CONFIG.UPDATE_INTERVAL
+    );
+  },
+
+  stopCountdownUpdate() {
+    clearInterval(this.countdownIntervalId);
+    this.countdownIntervalId = null;
   },
 
   updateCountdown() {
