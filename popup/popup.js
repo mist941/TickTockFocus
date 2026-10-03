@@ -799,9 +799,11 @@ const PresetFormManager = {
     ELEMENTS.preset.inputs.seconds.value = "";
   },
 
+  // Each one hides the button that has focus, so focus has to be moved.
   showForm() {
     ELEMENTS.preset.form.style.display = "block";
     ELEMENTS.preset.header.style.display = "none";
+    ELEMENTS.preset.inputs.name.focus();
   },
 
   hideForm() {
@@ -809,6 +811,7 @@ const PresetFormManager = {
     ELEMENTS.preset.header.style.display = "block";
     this.clearForm();
     this.clearFieldErrors();
+    ELEMENTS.preset.createButton.focus();
   },
 
   async savePreset() {
