@@ -304,6 +304,7 @@ input[type="number"]::-webkit-inner-spin-button {
 
 /* Preset list styles */
 .clock-presets-list {
+  list-style: none;
   margin: var(--spacing-lg) 0;
   min-height: 25px;
   border: 1px dashed var(--color-border-primary);
@@ -334,18 +335,36 @@ input[type="number"]::-webkit-inner-spin-button {
   min-width: 30px;
 }
 
-.preset-remove-btn {
+.preset-item-actions {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.preset-move-btn,
+.preset-remove-btn {
   background: none;
   border: none;
+  border-radius: var(--border-radius-sm);
   color: var(--color-text-primary);
   cursor: pointer;
   font-size: var(--font-size-lg);
   padding: 0 var(--spacing-sm);
+}
 
-  &:hover {
-    color: var(--color-text-danger);
+.preset-move-btn {
+  &:hover:not(:disabled) {
+    color: var(--color-text-light);
   }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+}
+
+.preset-remove-btn:hover {
+  color: var(--color-text-danger);
 }
 
 /* Timer styles */

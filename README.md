@@ -23,7 +23,7 @@ TickTockFocus is a powerful Chrome extension that helps you manage your time wit
 
 ### ⚙️ Customization Options
 - Create unlimited timer presets for different activities
-- Easily reorder clock segments with drag-and-drop functionality
+- Easily reorder clock segments with drag-and-drop or the ↑ and ↓ buttons
 - Toggle between 12-hour and 24-hour time formats
 - Presets and settings sync across your computers through your Google account when Chrome Sync is on
 
@@ -39,7 +39,7 @@ TickTockFocus is a powerful Chrome extension that helps you manage your time wit
 2. Click "Create preset"
 3. Enter a name for your preset
 4. Add clock segments (at least 30 seconds each) by setting hours, minutes, seconds and clicking "Add"
-5. Rearrange segments by dragging them into the desired order
+5. Rearrange segments by dragging them or with the ↑ and ↓ buttons
 6. Click "Create" to save your preset
 
 ### Running a Timer

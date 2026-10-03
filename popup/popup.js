@@ -59,6 +59,7 @@ const ELEMENTS = new Proxy(
         seconds: document.getElementById("preset_seconds"),
       },
       list: document.querySelector(".clock-presets-list"),
+      segmentsStatus: document.getElementById("segments_status"),
       message: document.getElementById("presets_message"),
       errors: {
         name: document.getElementById("preset_name_error"),
@@ -782,6 +783,7 @@ const PresetFormManager = {
 
   clearClocksList() {
     ELEMENTS.preset.list.innerHTML = "";
+    ELEMENTS.preset.segmentsStatus.textContent = "";
   },
 
   clearForm() {
@@ -868,7 +870,7 @@ const PresetFormManager = {
   },
 
   createPresetItem(hours, minutes, seconds) {
-    const presetItem = Utils.createElementWithClass("div", "preset-item");
+    const presetItem = Utils.createElementWithClass("li", "preset-item");
     presetItem.draggable = true;
     Object.assign(presetItem.dataset, { hours, minutes, seconds });
 
@@ -879,24 +881,74 @@ const PresetFormManager = {
       presetItem.append(timeItem);
     });
 
+    const actions = Utils.createElementWithClass("div", "preset-item-actions");
+    [
+      ["up", "↑"],
+      ["down", "↓"],
+    ].forEach(([direction, arrow]) => {
+      const moveButton = Utils.createElementWithClass("button", "preset-move-btn");
+      moveButton.type = "button";
+      moveButton.dataset.direction = direction;
+      moveButton.textContent = arrow;
+      actions.append(moveButton);
+    });
+
     const removeButton = Utils.createElementWithClass("button", "preset-remove-btn");
     removeButton.type = "button";
     removeButton.textContent = "×";
-    presetItem.append(removeButton);
+    actions.append(removeButton);
+    presetItem.append(actions);
     return presetItem;
   },
 
+  getSegmentDurationText(item) {
+    const { hours, minutes, seconds } = item.dataset;
+    return [hours, minutes, seconds].map((value) => Utils.padNumber(value)).join(":");
+  },
+
   // Labels name the segment's position, so they change whenever the order does.
-  updateSegmentLabels() {
-    ELEMENTS.preset.list.querySelectorAll(".preset-item").forEach((item, index) => {
-      const { hours, minutes, seconds } = item.dataset;
-      const duration = [hours, minutes, seconds]
-        .map((value) => Utils.padNumber(value))
-        .join(":");
-      const removeButton = item.querySelector(".preset-remove-btn");
-      removeButton.setAttribute("aria-label", `Remove segment ${index + 1} (${duration})`);
-      removeButton.title = removeButton.getAttribute("aria-label");
+  updateSegmentControls() {
+    const items = [...ELEMENTS.preset.list.querySelectorAll(".preset-item")];
+    const setLabel = (button, label) => {
+      button.setAttribute("aria-label", label);
+      button.title = label;
+    };
+
+    items.forEach((item, index) => {
+      const position = index + 1;
+      const [moveUpButton, moveDownButton] = item.querySelectorAll(".preset-move-btn");
+      setLabel(moveUpButton, `Move segment ${position} up`);
+      setLabel(moveDownButton, `Move segment ${position} down`);
+      moveUpButton.disabled = index === 0;
+      moveDownButton.disabled = index === items.length - 1;
+      setLabel(
+        item.querySelector(".preset-remove-btn"),
+        `Remove segment ${position} (${this.getSegmentDurationText(item)})`
+      );
     });
+  },
+
+  moveSegment(item, direction) {
+    // Moving the neighbour rather than the item keeps the focused button in the DOM.
+    if (direction === "up" && item.previousElementSibling) {
+      item.after(item.previousElementSibling);
+    } else if (direction === "down" && item.nextElementSibling) {
+      item.before(item.nextElementSibling);
+    } else {
+      return;
+    }
+    this.updateSegmentControls();
+
+    // At either end the pressed button becomes disabled; keep focus on the row.
+    if (item.querySelector(`[data-direction="${direction}"]`).disabled) {
+      const otherDirection = direction === "up" ? "down" : "up";
+      item.querySelector(`[data-direction="${otherDirection}"]`).focus();
+    }
+
+    const items = [...ELEMENTS.preset.list.querySelectorAll(".preset-item")];
+    ELEMENTS.preset.segmentsStatus.textContent = `Segment ${this.getSegmentDurationText(
+      item
+    )} moved to position ${items.indexOf(item) + 1} of ${items.length}.`;
   },
 
   readSegmentInputs() {
@@ -954,18 +1006,18 @@ const PresetFormManager = {
     ELEMENTS.preset.list.appendChild(presetItem);
 
     this.clearClocks();
-    this.initializeDragAndDrop(presetItem);
-    this.updateSegmentLabels();
+    this.initializeSegmentItem(presetItem);
+    this.updateSegmentControls();
     this.showFieldError("segment", "");
     this.showFieldError("segments", "");
   },
 
-  initializeDragAndDrop(item) {
+  initializeSegmentItem(item) {
     const dragEvents = {
       dragstart: (e) => e.target.classList.add("dragging"),
       dragend: (e) => {
         e.target.classList.remove("dragging");
-        this.updateSegmentLabels();
+        this.updateSegmentControls();
       },
     };
 
@@ -973,10 +1025,22 @@ const PresetFormManager = {
       item.addEventListener(event, handler);
     });
 
+    item.querySelectorAll(".preset-move-btn").forEach((moveButton) => {
+      moveButton.addEventListener("click", () =>
+        this.moveSegment(item, moveButton.dataset.direction)
+      );
+    });
+
     const removeBtn = item.querySelector(".preset-remove-btn");
     removeBtn.addEventListener("click", () => {
+      // The button disappears with its row, so focus the neighbouring row's.
+      const neighbour = item.nextElementSibling || item.previousElementSibling;
+      const nextFocus = neighbour
+        ? neighbour.querySelector(".preset-remove-btn")
+        : ELEMENTS.preset.inputs.hours;
       item.remove();
-      this.updateSegmentLabels();
+      this.updateSegmentControls();
+      nextFocus.focus();
     });
   },
 
