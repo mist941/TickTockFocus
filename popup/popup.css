@@ -17,6 +17,7 @@
   /* Border colors */
   --color-border-primary: rgb(52 52 56);
   --color-border-secondary: #666;
+  --color-focus-ring: #4caf50;
 
   /* Spacing */
   --spacing-xs: 4px;
@@ -31,7 +32,8 @@
   --border-radius-lg: 15px;
 
   /* Transitions */
-  --transition-default: 300ms all ease;
+  /* Not "all": focus outlines should appear at once, not fade in */
+  --transition-default: background-color 300ms ease, color 300ms ease;
 
   /* Font sizes */
   --font-size-sm: 14px;
@@ -58,6 +60,11 @@ body {
 
 p {
   margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 /* Remove number input spinners */
@@ -203,12 +210,17 @@ input[type="number"]::-webkit-inner-spin-button {
 /* Input styles */
 .input {
   background-color: var(--color-bg-tertiary);
-  color: var(--color-text-primary);
+  color: var(--color-text-light);
   border: none;
   padding: var(--spacing-xs) var(--spacing-lg);
   border-radius: var(--border-radius-sm);
   font-size: var(--font-size-md);
-  outline: none;
+
+  /* 4.8:1 on the input background */
+  &::placeholder {
+    color: var(--color-text-primary);
+    opacity: 1;
+  }
 }
 
 /* Clock settings styles */
@@ -406,7 +418,6 @@ input[type="number"]::-webkit-inner-spin-button {
   font-size: var(--font-size-md);
   cursor: pointer;
   min-width: 120px;
-  outline: none;
 
   &:disabled {
     opacity: 0.5;
