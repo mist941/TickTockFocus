@@ -3,6 +3,10 @@ const CONFIG = {
   MAX_TIME_VALUE: 99,
   UPDATE_INTERVAL: 1000,
   DEFAULT_TIME_FORMAT: "24h",
+  // In packed extensions Chrome fires alarms at most once every 30 seconds
+  // and may delay them further (unpacked extensions are exempt). Each segment
+  // ends with an alarm, so a shorter segment would be announced late.
+  MIN_SEGMENT_SECONDS: 30,
   // Keeps every preset far below chrome.storage.sync's 8 KB per-item quota
   // (the worst case is about 3 KB).
   MAX_PRESET_NAME_LENGTH: 50,
@@ -853,8 +857,12 @@ const PresetFormManager = {
   },
 
   validateSegment({ hours, minutes, seconds }) {
-    if (hours * 3600 + minutes * 60 + seconds === 0) {
+    const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+    if (totalSeconds === 0) {
       return "Enter a duration longer than 00:00:00.";
+    }
+    if (totalSeconds < CONFIG.MIN_SEGMENT_SECONDS) {
+      return `Each segment must be at least ${CONFIG.MIN_SEGMENT_SECONDS} seconds long.`;
     }
     return "";
   },

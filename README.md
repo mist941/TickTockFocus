@@ -38,7 +38,7 @@ TickTockFocus is a powerful Chrome extension that helps you manage your time wit
 1. Click the "Presets" tab
 2. Click "Create preset"
 3. Enter a name for your preset
-4. Add clock segments by setting hours, minutes, seconds and clicking "Add"
+4. Add clock segments (at least 30 seconds each) by setting hours, minutes, seconds and clicking "Add"
 5. Rearrange segments by dragging them into the desired order
 6. Click "Create" to save your preset
 
