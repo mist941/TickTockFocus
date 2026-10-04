@@ -25,6 +25,11 @@ const CONFIG = {
   // (the worst case is about 3 KB).
   MAX_PRESET_NAME_LENGTH: 50,
   MAX_SEGMENTS_PER_PRESET: 50,
+  // Sync writes are rate-limited, so each popup open moves at most this many
+  // local-only items back to sync.
+  MAX_SYNC_RETRIES_PER_OPEN: 10,
+  // A sync often changes several presets at once; the lists reload once.
+  PRESETS_RELOAD_DELAY_MS: 150,
   STORAGE_KEYS: {
     SETTINGS: "settings",
     PRESET_PREFIX: "preset_",
@@ -95,6 +100,11 @@ const Utils = {
   getClocksDurationMs: (clocks) =>
     clocks.reduce((total, clock) => total + Utils.getSegmentDurationMs(clock), 0),
 
+  hasShortSegments: (clocks) =>
+    clocks.some(
+      (clock) => Utils.getSegmentDurationMs(clock) < CONFIG.MIN_SEGMENT_SECONDS * 1000
+    ),
+
   // HH:MM:SS, rounded up so a countdown only reads 00:00:00 once it has ended.
   formatDuration(milliseconds) {
     const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
@@ -136,6 +146,11 @@ const Storage = {
     return /quota/i.test(error?.message || "");
   },
 
+  // Unlike the size quotas, these limits pass after a while.
+  isWriteRateError(error) {
+    return /MAX_WRITE_OPERATIONS_PER_(MINUTE|HOUR)/.test(error?.message || "");
+  },
+
   presetKey(presetId) {
     return `${CONFIG.STORAGE_KEYS.PRESET_PREFIX}${presetId}`;
   },
@@ -167,6 +182,31 @@ const Storage = {
     }
     // A local copy left by an earlier fallback would shadow the synced value.
     await chrome.storage.local.remove(Object.keys(items));
+  },
+
+  // Items that fell back to local would otherwise never sync. A write-rate
+  // error ends this attempt until the next open; an item over a size quota
+  // stays local, which is expected.
+  async retryLocalOnlyItems() {
+    const localItems = await chrome.storage.local.get(null);
+    const keysToRetry = Object.keys(localItems)
+      .filter(
+        (key) =>
+          key.startsWith(CONFIG.STORAGE_KEYS.PRESET_PREFIX) ||
+          key === CONFIG.STORAGE_KEYS.SETTINGS
+      )
+      .slice(0, CONFIG.MAX_SYNC_RETRIES_PER_OPEN);
+
+    for (const key of keysToRetry) {
+      try {
+        await chrome.storage.sync.set({ [key]: localItems[key] });
+      } catch (error) {
+        if (this.isWriteRateError(error)) return;
+        if (this.isQuotaError(error)) continue;
+        throw error;
+      }
+      await chrome.storage.local.remove(key);
+    }
   },
 
   async getSettings() {
@@ -396,7 +436,7 @@ const ClockManager = {
     }
   },
 
-  async startClockUpdate() {
+  async loadTimeFormat() {
     try {
       const settings = await Storage.getSettings();
       this.timeFormat = settings.timeFormat || CONFIG.DEFAULT_TIME_FORMAT;
@@ -404,6 +444,10 @@ const ClockManager = {
       console.error("Error loading settings:", error);
     }
     this.updateClock();
+  },
+
+  async startClockUpdate() {
+    await this.loadTimeFormat();
     setInterval(() => this.updateClock(), CONFIG.UPDATE_INTERVAL);
   },
 };
@@ -706,7 +750,18 @@ const TimerManager = {
     if (!button) return;
     this.isRunning = isRunning;
     button.textContent = isRunning ? "Stop" : "Start";
+    this.updatePresetSelectState();
     this.updateStartButtonState();
+  },
+
+  // Locked during a run, so the dropdown can't show one preset while the ring
+  // and countdown show another.
+  updatePresetSelectState() {
+    const { presetSelect, toggleButton } = ELEMENTS.timer;
+    const hadFocus = document.activeElement === presetSelect;
+    presetSelect.disabled = this.isRunning;
+    // A disabled control loses focus; keep it on the timer controls.
+    if (this.isRunning && hadFocus) toggleButton.focus();
   },
 
   selectPreset(presetId) {
@@ -730,6 +785,7 @@ const TimerManager = {
     }
 
     const selectedPresetId = ELEMENTS.timer.presetSelect.value;
+    const selectedPreset = this.presets.find((preset) => preset.id === selectedPresetId);
     if (this.presets.length === 0) {
       button.disabled = true;
       this.showTimerMessage("Create a preset on the Presets tab to start.");
@@ -741,6 +797,12 @@ const TimerManager = {
       this.showTimerMessage("This preset has no duration. Select another one.", {
         isError: true,
       });
+    } else if (Utils.hasShortSegments(selectedPreset.clocks)) {
+      // Presets saved by v1.0 can have segments shorter than the form allows now.
+      button.disabled = false;
+      this.showTimerMessage(
+        `Some segments are shorter than ${CONFIG.MIN_SEGMENT_SECONDS} seconds, so their notifications may arrive late.`
+      );
     } else {
       button.disabled = false;
       this.showTimerMessage("");
@@ -799,9 +861,11 @@ const PresetFormManager = {
     ELEMENTS.preset.inputs.seconds.value = "";
   },
 
+  // Each one hides the button that has focus, so focus has to be moved.
   showForm() {
     ELEMENTS.preset.form.style.display = "block";
     ELEMENTS.preset.header.style.display = "none";
+    ELEMENTS.preset.inputs.name.focus();
   },
 
   hideForm() {
@@ -809,6 +873,7 @@ const PresetFormManager = {
     ELEMENTS.preset.header.style.display = "block";
     this.clearForm();
     this.clearFieldErrors();
+    ELEMENTS.preset.createButton.focus();
   },
 
   async savePreset() {
@@ -1092,6 +1157,14 @@ const PresetFormManager = {
       const presetsList = document.querySelector(".saved-presets-list");
       const presets = await Storage.getPresets();
 
+      // Changes from other devices rebuild the list at any moment; a focused
+      // button would be destroyed, so its replacement takes the focus.
+      const focusedButton = presetsList.contains(document.activeElement)
+        ? document.activeElement
+        : null;
+      const focusedPresetId = focusedButton?.closest(".saved-preset-item").dataset.presetId;
+      let buttonToRefocus = null;
+
       presetsList.innerHTML = "";
 
       presets.forEach((preset) => {
@@ -1119,10 +1192,18 @@ const PresetFormManager = {
           this.deletePreset(preset.id);
         });
 
+        if (preset.id === focusedPresetId) {
+          buttonToRefocus = focusedButton.classList.contains("saved-preset-delete")
+            ? deleteButton
+            : selectButton;
+        }
+
         presetItem.appendChild(selectButton);
         presetItem.appendChild(deleteButton);
         presetsList.appendChild(presetItem);
       });
+
+      buttonToRefocus?.focus();
     } catch (error) {
       console.error("Error loading saved presets:", error);
       this.showMessage("Couldn't load your presets. Reopen the popup to try again.");
@@ -1130,10 +1211,12 @@ const PresetFormManager = {
   },
 
   openOnTimerTab(presetId) {
-    TimerManager.selectPreset(presetId);
+    // During a run the dropdown is disabled, so the selection stays as it is.
+    if (!TimerManager.isRunning) TimerManager.selectPreset(presetId);
     TabManager.switchTab("timer");
     // The clicked button is now hidden, so move focus somewhere useful.
-    ELEMENTS.timer.presetSelect.focus();
+    const { presetSelect, toggleButton } = ELEMENTS.timer;
+    (presetSelect.disabled ? toggleButton : presetSelect).focus();
   },
 
   async deletePreset(presetId) {
@@ -1157,6 +1240,43 @@ const PresetFormManager = {
     }
 
     this.initializePresetsList();
+  },
+};
+
+// Keeps the popup in step with changes made elsewhere: on another synced
+// device, in another popup or by the service worker. The popup's own writes
+// arrive here too; the handlers only re-read storage, so they can't loop.
+const StorageWatcher = {
+  presetsReloadTimeoutId: null,
+
+  handleChanges(changes, areaName) {
+    const changedKeys = Object.keys(changes);
+    if (changedKeys.some((key) => key.startsWith(CONFIG.STORAGE_KEYS.PRESET_PREFIX))) {
+      this.schedulePresetsReload();
+    }
+    // Re-read rather than use the new value: a local copy may shadow sync.
+    if (changedKeys.includes(CONFIG.STORAGE_KEYS.SETTINGS)) {
+      ClockManager.loadTimeFormat();
+    }
+    if (areaName === "local" && ("isRunning" in changes || "endTime" in changes)) {
+      TimerManager.restoreTimerState();
+    }
+  },
+
+  // Only the two lists are rebuilt, so an open "Create preset" form keeps
+  // everything typed into it.
+  schedulePresetsReload() {
+    clearTimeout(this.presetsReloadTimeoutId);
+    this.presetsReloadTimeoutId = setTimeout(async () => {
+      await PresetFormManager.loadSavedPresets();
+      await TimerManager.loadPresets();
+    }, CONFIG.PRESETS_RELOAD_DELAY_MS);
+  },
+
+  initialize() {
+    chrome.storage.onChanged.addListener((changes, areaName) =>
+      this.handleChanges(changes, areaName)
+    );
   },
 };
 
@@ -1203,6 +1323,15 @@ const initializeApp = async () => {
         "Couldn't move your presets from the previous version. They're still on this device; reopen the popup to try again."
       );
     }
+
+    try {
+      await Storage.retryLocalOnlyItems();
+    } catch (error) {
+      console.error("Error moving local-only items to sync:", error);
+    }
+
+    // Before the first reads, so no change can slip in between.
+    StorageWatcher.initialize();
 
     await ClockManager.startClockUpdate();
     await PresetFormManager.loadSavedPresets();
