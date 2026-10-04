@@ -20,6 +20,17 @@ function getSegmentDurationMs(clock) {
   return (clock.hours * 3600 + clock.minutes * 60 + clock.seconds) * 1000;
 }
 
+function isPastGracePeriod(time) {
+  return Date.now() - time >= COMPLETION_GRACE_MS;
+}
+
+function formatHoursAndMinutes(time) {
+  return new Date(time).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 async function showNotification(title, message) {
   try {
     await chrome.notifications.create({
@@ -44,16 +55,22 @@ async function clearTimerAlarms() {
   await Promise.all(timerAlarms.map((alarm) => chrome.alarms.clear(alarm.name)));
 }
 
-async function completeTimer() {
+async function completeTimer({ finishTime } = {}) {
   const { presetName } = await chrome.storage.local.get("presetName");
   await clearTimerAlarms();
   await chrome.storage.local.set(RUN_STATE_RESET);
-  await showNotification("Timer Complete", `Timer "${presetName}" completed!`);
+  const message =
+    finishTime === undefined
+      ? `Timer "${presetName}" completed!`
+      : `Timer "${presetName}" finished at ${formatHoursAndMinutes(finishTime)}.`;
+  await showNotification("Timer Complete", message);
 }
 
-async function finishExpiredRun(run) {
-  if (Date.now() - run.endTime < COMPLETION_GRACE_MS) {
+async function finishExpiredRun(run, { announceLateFinish }) {
+  if (!isPastGracePeriod(run.endTime)) {
     await completeTimer();
+  } else if (announceLateFinish) {
+    await completeTimer({ finishTime: run.endTime });
   } else {
     await stopTimer();
   }
@@ -76,7 +93,7 @@ async function scheduleRunAlarms(runStartTime, clocks, endTime) {
 async function startTimer({ duration, presetName, clocks }) {
   const previousRun = await chrome.storage.local.get(["isRunning", "endTime"]);
   if (previousRun.isRunning && previousRun.endTime <= Date.now()) {
-    await finishExpiredRun(previousRun);
+    await finishExpiredRun(previousRun, { announceLateFinish: false });
   }
 
   await clearTimerAlarms();
@@ -110,7 +127,7 @@ async function reconcileRunState() {
   if (!run.isRunning) {
     await clearTimerAlarms();
   } else if (run.endTime <= Date.now()) {
-    await finishExpiredRun(run);
+    await finishExpiredRun(run, { announceLateFinish: true });
   } else {
     const runStartTime = run.endTime - run.totalDuration;
     await clearTimerAlarms();
@@ -130,8 +147,11 @@ async function handleAlarm(alarm) {
   if (!run.isRunning || alarm.scheduledTime < runStartTime) return;
 
   if (alarm.name === COUNTDOWN_ALARM) {
-    await completeTimer();
-  } else if (alarm.name.startsWith(SEGMENT_ALARM_PREFIX)) {
+    await finishExpiredRun(run, { announceLateFinish: true });
+  } else if (
+    alarm.name.startsWith(SEGMENT_ALARM_PREFIX) &&
+    !isPastGracePeriod(alarm.scheduledTime)
+  ) {
     const clockIndex = Number(alarm.name.slice(SEGMENT_ALARM_PREFIX.length));
     await showNotification(
       "Clock Milestone Reached",
