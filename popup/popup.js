@@ -1,34 +1,21 @@
-// Constants for configuration
 const CONFIG = {
   UPDATE_INTERVAL: 1000,
   DEFAULT_TIME_FORMAT: "24h",
-  // In packed extensions Chrome fires alarms at most once every 30 seconds
-  // and may delay them further (unpacked extensions are exempt). Each segment
-  // ends with an alarm, so a shorter segment would be announced late.
   MIN_SEGMENT_SECONDS: 30,
-  // The only definition of the segment ranges: input clamping, validation and
-  // the inputs' min/max attributes (set on startup) all read it.
   SEGMENT_FIELD_LIMITS: {
     hours: { min: 0, max: 23, label: "Hours" },
     minutes: { min: 0, max: 59, label: "Minutes" },
     seconds: { min: 0, max: 59, label: "Seconds" },
   },
-  // Ring marker labels: distance outside the ring, and an upper bound for one
-  // 11px digit's width and the line height, used to keep labels from overlapping.
   POINT_LABEL: {
     OFFSET: 16,
     CHARACTER_WIDTH: 6.2,
     HEIGHT: 13,
     GAP: 2,
   },
-  // Keeps every preset far below chrome.storage.sync's 8 KB per-item quota
-  // (the worst case is about 3 KB).
   MAX_PRESET_NAME_LENGTH: 50,
   MAX_SEGMENTS_PER_PRESET: 50,
-  // Sync writes are rate-limited, so each popup open moves at most this many
-  // local-only items back to sync.
   MAX_SYNC_RETRIES_PER_OPEN: 10,
-  // A sync often changes several presets at once; the lists reload once.
   PRESETS_RELOAD_DELAY_MS: 150,
   STORAGE_KEYS: {
     SETTINGS: "settings",
@@ -39,7 +26,6 @@ const CONFIG = {
   },
 };
 
-// DOM Elements - Using a proxy to handle missing elements
 const ELEMENTS = new Proxy(
   {
     timer: {
@@ -88,11 +74,9 @@ const ELEMENTS = new Proxy(
   }
 );
 
-// Utility functions
 const Utils = {
   padNumber: (num, size = 2) => String(num).padStart(size, "0"),
 
-  // background.js computes segment durations the same way; keep them in agreement.
   getSegmentDurationMs: (clock) =>
     ((clock.hours || 0) * 3600 + (clock.minutes || 0) * 60 + (clock.seconds || 0)) *
     1000,
@@ -105,7 +89,6 @@ const Utils = {
       (clock) => Utils.getSegmentDurationMs(clock) < CONFIG.MIN_SEGMENT_SECONDS * 1000
     ),
 
-  // HH:MM:SS, rounded up so a countdown only reads 00:00:00 once it has ended.
   formatDuration(milliseconds) {
     const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
     const hours = Math.floor(totalSeconds / 3600);
@@ -138,15 +121,11 @@ const Utils = {
   },
 };
 
-// Presets and settings live in chrome.storage.sync so they follow the user's
-// Google account. A write that hits a sync quota falls back to
-// chrome.storage.local, so every read merges both areas.
 const Storage = {
   isQuotaError(error) {
     return /quota/i.test(error?.message || "");
   },
 
-  // Unlike the size quotas, these limits pass after a while.
   isWriteRateError(error) {
     return /MAX_WRITE_OPERATIONS_PER_(MINUTE|HOUR)/.test(error?.message || "");
   },
@@ -174,19 +153,14 @@ const Storage = {
         await chrome.storage.local.set(items);
         return;
       }
-      // Retry one by one so only the items that don't fit stay local-only.
       for (const [key, value] of entries) {
         await this.setItems({ [key]: value });
       }
       return;
     }
-    // A local copy left by an earlier fallback would shadow the synced value.
     await chrome.storage.local.remove(Object.keys(items));
   },
 
-  // Items that fell back to local would otherwise never sync. A write-rate
-  // error ends this attempt until the next open; an item over a size quota
-  // stays local, which is expected.
   async retryLocalOnlyItems() {
     const localItems = await chrome.storage.local.get(null);
     const keysToRetry = Object.keys(localItems)
@@ -241,9 +215,6 @@ const Storage = {
   },
 };
 
-// One-time move of v1.0 data from the popup's localStorage to chrome.storage.
-// The old keys are removed only after the copies read back intact, so a run
-// that fails or is interrupted loses nothing and retries on the next open.
 const LegacyMigration = {
   readLegacyKey(key) {
     const rawValue = localStorage.getItem(key);
@@ -263,7 +234,6 @@ const LegacyMigration = {
     );
   },
 
-  // Storage may hand objects back with their keys in a different order.
   toComparableJson(value) {
     return JSON.stringify(value, (key, nestedValue) =>
       nestedValue && typeof nestedValue === "object" && !Array.isArray(nestedValue)
@@ -284,8 +254,6 @@ const LegacyMigration = {
 
     const usedIds = new Set();
     presets.forEach((preset, index) => {
-      // Presets are stored by id, so a missing or repeated id would lose one.
-      // The replacement depends only on the data, so a retried run reuses it.
       if (typeof preset.id !== "string" || usedIds.has(preset.id)) {
         preset.id = `${typeof preset.id === "string" ? preset.id : "legacy"}-${index}`;
       }
@@ -303,14 +271,12 @@ const LegacyMigration = {
 
     const settingsKey = CONFIG.STORAGE_KEYS.SETTINGS;
     const storedItems = await Storage.getItems(settingsKey);
-    // Settings that already arrived through sync win over this device's old copy.
     if (settings && !storedItems[settingsKey]) {
       itemsToWrite[settingsKey] = settings;
     }
     return true;
   },
 
-  // v1.0 stored the ring progress every second; it is now derived from endTime.
   async removeTimerProgress() {
     const { timerProgress } = await chrome.storage.local.get("timerProgress");
     if (timerProgress !== undefined) {
@@ -327,7 +293,6 @@ const LegacyMigration = {
     const itemsToWrite = {};
     const legacyKeysToRemove = [];
 
-    // Values v1.0 itself couldn't have read are left where they are.
     if (legacyPresets.isReadable && this.collectPresets(legacyPresets, itemsToWrite)) {
       legacyKeysToRemove.push(LEGACY_PRESETS);
     }
@@ -355,11 +320,9 @@ const LegacyMigration = {
   },
 };
 
-// Tab Management with error handling
 const TabManager = {
   switchTab(tabName, { focusTab = false } = {}) {
     try {
-      // Only the selected tab is in the Tab order; arrow keys reach the others.
       ELEMENTS.tabs.list.forEach((tab) => {
         const isSelected = tab.dataset.tab === tabName;
         tab.setAttribute("aria-selected", String(isSelected));
@@ -401,7 +364,6 @@ const TabManager = {
   },
 };
 
-// Clock Management with time handling
 const ClockManager = {
   timeFormat: CONFIG.DEFAULT_TIME_FORMAT,
 
@@ -452,7 +414,6 @@ const ClockManager = {
   },
 };
 
-// Timer Management with state handling
 const TimerManager = {
   countdownIntervalId: null,
   endTime: null,
@@ -494,7 +455,6 @@ const TimerManager = {
       if (this.presets.some((preset) => preset.id === selectedPresetId)) {
         presetSelect.value = selectedPresetId;
       } else if (selectedPresetId) {
-        // The stored preset was deleted, possibly on another synced device.
         await chrome.storage.local.remove("selectedPresetId");
       }
     } catch (error) {
@@ -513,7 +473,6 @@ const TimerManager = {
           this.startCountdownUpdate();
           this.updateToggleButton(true);
 
-          // Redraw points if timer is running and we have clocks data
           if (result.clocks) {
             this.drawPresetPoints(result.clocks);
           }
@@ -524,8 +483,6 @@ const TimerManager = {
     );
   },
 
-  // Resolves once the service worker confirms the command. Rejects when it
-  // can't be reached, reports a failure, or answers without a response.
   sendTimerCommand(message) {
     return new Promise((resolve, reject) => {
       chrome.runtime.sendMessage(message, (response) => {
@@ -566,7 +523,6 @@ const TimerManager = {
       return;
     }
 
-    // Draw points on the circle when the timer starts
     this.drawPresetPoints(preset.clocks);
     this.updateToggleButton(true);
     this.startCountdownUpdate();
@@ -584,7 +540,6 @@ const TimerManager = {
     ELEMENTS.timer.presetPoints.replaceChildren();
   },
 
-  // Places a label outside the ring, anchored on the side facing away from it.
   layoutPointLabel(text, angle, center, radius) {
     const { OFFSET, CHARACTER_WIDTH, HEIGHT, GAP } = CONFIG.POINT_LABEL;
     const x = center.x + (radius + OFFSET) * Math.sin(angle);
@@ -594,7 +549,6 @@ const TimerManager = {
     if (horizontalDirection > 0.3) anchor = "start";
     if (horizontalDirection < -0.3) anchor = "end";
 
-    // Estimated rather than measured, so it also works while the tab is hidden.
     const width = text.length * CHARACTER_WIDTH;
     const anchorShift = { start: 0, middle: width / 2, end: width }[anchor];
     const box = {
@@ -627,10 +581,8 @@ const TimerManager = {
 
     clocks.forEach((clock) => {
       accumulatedTime += Utils.getSegmentDurationMs(clock);
-      // The last segment ends where the ring starts, so it gets no marker.
       if (accumulatedTime >= totalDuration) return;
 
-      // Clockwise from 12 o'clock: where the arc's edge is when this segment ends.
       const angle = (accumulatedTime / totalDuration) * 2 * Math.PI;
       ELEMENTS.timer.presetPoints.append(
         this.createSvgElement("circle", {
@@ -647,7 +599,6 @@ const TimerManager = {
         center,
         radius
       );
-      // On short stages the marker stays but a label that would overlap is skipped.
       if (placedLabelBoxes.some((box) => Utils.boxesOverlap(box, label.box))) {
         return;
       }
@@ -695,8 +646,6 @@ const TimerManager = {
       (result) => {
         const timeLeft = result.endTime ? result.endTime - Date.now() : 0;
 
-        // Only the view changes here. The service worker's countdown alarm
-        // completes the run; sending stopTimer would cancel its notification.
         if (timeLeft <= 0) {
           this.showIdleState();
           return;
@@ -716,10 +665,6 @@ const TimerManager = {
     const isEmpty = remainingFraction <= 0;
     circle.classList.toggle("is-empty", isEmpty);
     circle.style.strokeDasharray = `${circumference} ${circumference}`;
-    // The path starts at 12 o'clock and runs clockwise. A negative offset hides
-    // the elapsed part, so the remaining arc is used up clockwise. An empty
-    // ring is hidden (a round cap would leave a dot) and reset to full, so the
-    // next run doesn't animate in from the wrong side.
     circle.style.strokeDashoffset = isEmpty
       ? 0
       : -(1 - remainingFraction) * circumference;
@@ -727,14 +672,12 @@ const TimerManager = {
 
   toggleTimer() {
     chrome.storage.local.get(["isRunning", "endTime"], (result) => {
-      // Past its end time a run is finished, even if its alarm hasn't fired yet.
       if (result.isRunning && result.endTime > Date.now()) {
         this.stopTimer();
       } else {
         const selectedPresetId = ELEMENTS.timer.presetSelect.value;
         const duration =
           selectedPresetId && this.getPresetDuration(selectedPresetId);
-        // Start is disabled in these cases; this covers a click that raced a change.
         if (!duration) {
           this.updateStartButtonState();
           return;
@@ -754,13 +697,10 @@ const TimerManager = {
     this.updateStartButtonState();
   },
 
-  // Locked during a run, so the dropdown can't show one preset while the ring
-  // and countdown show another.
   updatePresetSelectState() {
     const { presetSelect, toggleButton } = ELEMENTS.timer;
     const hadFocus = document.activeElement === presetSelect;
     presetSelect.disabled = this.isRunning;
-    // A disabled control loses focus; keep it on the timer controls.
     if (this.isRunning && hadFocus) toggleButton.focus();
   },
 
@@ -775,7 +715,6 @@ const TimerManager = {
     ELEMENTS.timer.message.classList.toggle("error", isError);
   },
 
-  // Start needs a selected preset with a duration. Stop is always available.
   updateStartButtonState() {
     const button = ELEMENTS.timer.toggleButton;
     if (this.isRunning) {
@@ -798,7 +737,6 @@ const TimerManager = {
         isError: true,
       });
     } else if (Utils.hasShortSegments(selectedPreset.clocks)) {
-      // Presets saved by v1.0 can have segments shorter than the form allows now.
       button.disabled = false;
       this.showTimerMessage(
         `Some segments are shorter than ${CONFIG.MIN_SEGMENT_SECONDS} seconds, so their notifications may arrive late.`
@@ -810,7 +748,6 @@ const TimerManager = {
   },
 };
 
-// Preset Form Management with improved validation and error handling
 const PresetFormManager = {
   showMessage(text) {
     ELEMENTS.preset.message.textContent = text;
@@ -861,7 +798,6 @@ const PresetFormManager = {
     ELEMENTS.preset.inputs.seconds.value = "";
   },
 
-  // Each one hides the button that has focus, so focus has to be moved.
   showForm() {
     ELEMENTS.preset.form.style.display = "block";
     ELEMENTS.preset.header.style.display = "none";
@@ -971,7 +907,6 @@ const PresetFormManager = {
     return [hours, minutes, seconds].map((value) => Utils.padNumber(value)).join(":");
   },
 
-  // Labels name the segment's position, so they change whenever the order does.
   updateSegmentControls() {
     const items = [...ELEMENTS.preset.list.querySelectorAll(".preset-item")];
     const setLabel = (button, label) => {
@@ -994,7 +929,6 @@ const PresetFormManager = {
   },
 
   moveSegment(item, direction) {
-    // Moving the neighbour rather than the item keeps the focused button in the DOM.
     if (direction === "up" && item.previousElementSibling) {
       item.after(item.previousElementSibling);
     } else if (direction === "down" && item.nextElementSibling) {
@@ -1004,7 +938,6 @@ const PresetFormManager = {
     }
     this.updateSegmentControls();
 
-    // At either end the pressed button becomes disabled; keep focus on the row.
     if (item.querySelector(`[data-direction="${direction}"]`).disabled) {
       const otherDirection = direction === "up" ? "down" : "up";
       item.querySelector(`[data-direction="${otherDirection}"]`).focus();
@@ -1098,7 +1031,6 @@ const PresetFormManager = {
 
     const removeBtn = item.querySelector(".preset-remove-btn");
     removeBtn.addEventListener("click", () => {
-      // The button disappears with its row, so focus the neighbouring row's.
       const neighbour = item.nextElementSibling || item.previousElementSibling;
       const nextFocus = neighbour
         ? neighbour.querySelector(".preset-remove-btn")
@@ -1140,7 +1072,6 @@ const PresetFormManager = {
       input.min = String(min);
       input.max = String(max);
 
-      // Number inputs accept these, but they would blank the value.
       input.addEventListener("keypress", (e) => {
         if ([".", ",", "e", "E", "+", "-"].includes(e.key)) e.preventDefault();
       });
@@ -1157,8 +1088,6 @@ const PresetFormManager = {
       const presetsList = document.querySelector(".saved-presets-list");
       const presets = await Storage.getPresets();
 
-      // Changes from other devices rebuild the list at any moment; a focused
-      // button would be destroyed, so its replacement takes the focus.
       const focusedButton = presetsList.contains(document.activeElement)
         ? document.activeElement
         : null;
@@ -1167,7 +1096,7 @@ const PresetFormManager = {
 
       presetsList.innerHTML = "";
 
-      presets.forEach((preset) => {
+      presets.forEach((preset, index) => {
         const presetItem = document.createElement("li");
         presetItem.className = "saved-preset-item";
         presetItem.dataset.presetId = preset.id;
@@ -1189,7 +1118,7 @@ const PresetFormManager = {
         deleteButton.title = deleteButton.getAttribute("aria-label");
 
         deleteButton.addEventListener("click", () => {
-          this.deletePreset(preset.id);
+          this.deletePreset(preset.id, index);
         });
 
         if (preset.id === focusedPresetId) {
@@ -1211,19 +1140,28 @@ const PresetFormManager = {
   },
 
   openOnTimerTab(presetId) {
-    // During a run the dropdown is disabled, so the selection stays as it is.
     if (!TimerManager.isRunning) TimerManager.selectPreset(presetId);
     TabManager.switchTab("timer");
-    // The clicked button is now hidden, so move focus somewhere useful.
     const { presetSelect, toggleButton } = ELEMENTS.timer;
     (presetSelect.disabled ? toggleButton : presetSelect).focus();
   },
 
-  async deletePreset(presetId) {
+  async deletePreset(presetId, listIndex) {
     try {
       await Storage.deletePreset(presetId);
       this.showMessage("");
       await this.loadSavedPresets();
+
+      const presetItems = document.querySelectorAll(".saved-preset-item");
+      const itemInPlace = presetItems[Math.min(listIndex, presetItems.length - 1)];
+      if (itemInPlace) {
+        itemInPlace.querySelector(".saved-preset-delete").focus();
+      } else if (ELEMENTS.preset.form.style.display === "block") {
+        ELEMENTS.preset.addButton.focus();
+      } else {
+        ELEMENTS.preset.createButton.focus();
+      }
+
       await TimerManager.loadPresets();
     } catch (error) {
       console.error("Error deleting preset:", error);
@@ -1243,9 +1181,6 @@ const PresetFormManager = {
   },
 };
 
-// Keeps the popup in step with changes made elsewhere: on another synced
-// device, in another popup or by the service worker. The popup's own writes
-// arrive here too; the handlers only re-read storage, so they can't loop.
 const StorageWatcher = {
   presetsReloadTimeoutId: null,
 
@@ -1254,7 +1189,6 @@ const StorageWatcher = {
     if (changedKeys.some((key) => key.startsWith(CONFIG.STORAGE_KEYS.PRESET_PREFIX))) {
       this.schedulePresetsReload();
     }
-    // Re-read rather than use the new value: a local copy may shadow sync.
     if (changedKeys.includes(CONFIG.STORAGE_KEYS.SETTINGS)) {
       ClockManager.loadTimeFormat();
     }
@@ -1263,8 +1197,6 @@ const StorageWatcher = {
     }
   },
 
-  // Only the two lists are rebuilt, so an open "Create preset" form keeps
-  // everything typed into it.
   schedulePresetsReload() {
     clearTimeout(this.presetsReloadTimeoutId);
     this.presetsReloadTimeoutId = setTimeout(async () => {
@@ -1280,27 +1212,22 @@ const StorageWatcher = {
   },
 };
 
-// Initialize Application with error handling
 const initializeApp = async () => {
   try {
     TabManager.initializeTabs();
 
-    // Toggle time format
     ELEMENTS.timer.clock.addEventListener("click", () => {
       ClockManager.toggleTimeFormat();
     });
 
-    // Replace separate start/stop listeners with single toggle
     ELEMENTS.timer.toggleButton?.addEventListener("click", () =>
       TimerManager.toggleTimer()
     );
 
-    // Save selected preset when changed
     ELEMENTS.timer.presetSelect?.addEventListener("change", (e) => {
       TimerManager.selectPreset(e.target.value);
     });
 
-    // Preset form event listeners
     ELEMENTS.preset.createButton?.addEventListener("click", () =>
       PresetFormManager.showForm()
     );
@@ -1314,7 +1241,6 @@ const initializeApp = async () => {
     PresetFormManager.initializeInputLimits();
     PresetFormManager.initializeEventListeners();
 
-    // Presets and settings have to be in chrome.storage before anything reads them.
     try {
       await LegacyMigration.run();
     } catch (error) {
@@ -1330,7 +1256,6 @@ const initializeApp = async () => {
       console.error("Error moving local-only items to sync:", error);
     }
 
-    // Before the first reads, so no change can slip in between.
     StorageWatcher.initialize();
 
     await ClockManager.startClockUpdate();

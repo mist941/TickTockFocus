@@ -9,8 +9,6 @@ const RUN_STATE_RESET = {
   clocks: null,
 };
 
-// Message and alarm handlers run one at a time, so an alarm can't interleave
-// with a start or stop and act on the wrong run.
 let lifecycleQueue = Promise.resolve();
 function runExclusive(task) {
   const result = lifecycleQueue.then(task);
@@ -53,9 +51,6 @@ async function completeTimer() {
   await showNotification("Timer Complete", `Timer "${presetName}" completed!`);
 }
 
-// For a run past its end time whose countdown alarm hasn't fired. Soon after
-// the end the alarm is merely late; later than that it was lost (extension
-// update, browser restart), and "Timer Complete" would be stale.
 async function finishExpiredRun(run) {
   if (Date.now() - run.endTime < COMPLETION_GRACE_MS) {
     await completeTimer();
@@ -64,9 +59,6 @@ async function finishExpiredRun(run) {
   }
 }
 
-// The last segment ends together with the countdown alarm, which announces it.
-// Boundaries that already passed get no alarm, so a restored run doesn't
-// announce the milestones it missed all at once.
 async function scheduleRunAlarms(runStartTime, clocks, endTime) {
   const now = Date.now();
   await chrome.alarms.create(COUNTDOWN_ALARM, { when: endTime });
@@ -82,9 +74,6 @@ async function scheduleRunAlarms(runStartTime, clocks, endTime) {
 }
 
 async function startTimer({ duration, presetName, clocks }) {
-  // Alarms can fire late, so the previous run may have ended without its
-  // countdown alarm firing yet. Finish it first so restarting can't swallow
-  // its "Timer Complete" notification.
   const previousRun = await chrome.storage.local.get(["isRunning", "endTime"]);
   if (previousRun.isRunning && previousRun.endTime <= Date.now()) {
     await finishExpiredRun(previousRun);
@@ -110,8 +99,6 @@ async function stopTimer() {
   await chrome.storage.local.set(RUN_STATE_RESET);
 }
 
-// Chrome clears alarms when the extension updates and may clear them when the
-// browser restarts, so they are rebuilt from the stored run state.
 async function reconcileRunState() {
   const run = await chrome.storage.local.get([
     "isRunning",
@@ -125,8 +112,6 @@ async function reconcileRunState() {
   } else if (run.endTime <= Date.now()) {
     await finishExpiredRun(run);
   } else {
-    // Alarms that survived a restart are replaced too, so past-due ones can't
-    // announce missed milestones late.
     const runStartTime = run.endTime - run.totalDuration;
     await clearTimerAlarms();
     await scheduleRunAlarms(runStartTime, run.clocks, run.endTime);
@@ -141,7 +126,6 @@ async function handleAlarm(alarm) {
     "presetName",
   ]);
 
-  // Ignore alarms left over from a run that was stopped, completed or replaced.
   const runStartTime = run.endTime - run.totalDuration;
   if (!run.isRunning || alarm.scheduledTime < runStartTime) return;
 
@@ -171,7 +155,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       console.error(`${request.action} failed:`, error);
       sendResponse({ success: false, error: error.message });
     });
-  return true; // Keep message channel open for async response
+  return true;
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
