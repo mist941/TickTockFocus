@@ -1,51 +1,40 @@
-/* CSS Variables for consistent theming */
 :root {
-  /* Colors */
   --color-bg-primary: rgb(24 24 27);
   --color-bg-secondary: rgb(39 39 42);
   --color-bg-tertiary: rgb(52 52 56);
   --color-bg-hover: rgb(63 63 68);
   --color-bg-active: rgb(74 74 80);
 
-  /* Text colors */
   --color-text-primary: rgb(161 161 170);
   --color-text-secondary: #ccc;
   --color-text-light: #fff;
   --color-text-danger: #ff4444;
   --color-text-error: #ff6b6b;
 
-  /* Border colors */
   --color-border-primary: rgb(52 52 56);
   --color-border-secondary: #666;
   --color-focus-ring: #4caf50;
 
-  /* Spacing */
   --spacing-xs: 4px;
   --spacing-sm: 5px;
   --spacing-md: 7px;
   --spacing-lg: 10px;
   --spacing-xl: 20px;
 
-  /* Border radius */
   --border-radius-sm: 4px;
   --border-radius-md: 8px;
   --border-radius-lg: 15px;
 
-  /* Transitions */
-  /* Not "all": focus outlines should appear at once, not fade in */
   --transition-default: background-color 300ms ease, color 300ms ease;
 
-  /* Font sizes */
   --font-size-sm: 14px;
   --font-size-md: 16px;
   --font-size-lg: 18px;
 
-  /* Layout */
   --popup-width: 370px;
   --popup-height: 500px;
 }
 
-/* Reset styles */
 body {
   font-family: Arial, sans-serif;
   width: var(--popup-width);
@@ -67,14 +56,12 @@ p {
   outline-offset: 2px;
 }
 
-/* Remove number input spinners */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
-/* Layout components */
 .container {
   height: 100%;
   width: 100%;
@@ -89,7 +76,6 @@ input[type="number"]::-webkit-inner-spin-button {
   border-radius: var(--border-radius-md);
 }
 
-/* Header styles */
 .header {
   display: flex;
   justify-content: space-between;
@@ -97,7 +83,6 @@ input[type="number"]::-webkit-inner-spin-button {
   padding: var(--spacing-lg);
 }
 
-/* Tab styles */
 .tab-container {
   display: flex;
   gap: var(--spacing-lg);
@@ -124,7 +109,6 @@ input[type="number"]::-webkit-inner-spin-button {
   color: var(--color-text-light);
 }
 
-/* Clock styles */
 .clock {
   font: inherit;
   color: var(--color-text-light);
@@ -139,12 +123,10 @@ input[type="number"]::-webkit-inner-spin-button {
   }
 }
 
-/* Content styles */
 .content {
   height: 100%;
 }
 
-/* Button styles */
 .button {
   border: none;
   padding: var(--spacing-xs) var(--spacing-lg);
@@ -180,7 +162,6 @@ input[type="number"]::-webkit-inner-spin-button {
   }
 }
 
-/* Preset styles */
 .preset-header {
   display: flex;
   justify-content: space-between;
@@ -207,7 +188,6 @@ input[type="number"]::-webkit-inner-spin-button {
   gap: var(--spacing-lg);
 }
 
-/* Input styles */
 .input {
   background-color: var(--color-bg-tertiary);
   color: var(--color-text-light);
@@ -216,14 +196,12 @@ input[type="number"]::-webkit-inner-spin-button {
   border-radius: var(--border-radius-sm);
   font-size: var(--font-size-md);
 
-  /* 4.8:1 on the input background */
   &::placeholder {
     color: var(--color-text-primary);
     opacity: 1;
   }
 }
 
-/* Clock settings styles */
 .clock-settings {
   display: flex;
   align-items: center;
@@ -260,7 +238,6 @@ input[type="number"]::-webkit-inner-spin-button {
   margin-bottom: var(--spacing-xs);
 }
 
-/* Hidden visually but still read by screen readers */
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -273,7 +250,6 @@ input[type="number"]::-webkit-inner-spin-button {
   border: 0;
 }
 
-/* Message styles */
 .form-message {
   font-size: var(--font-size-sm);
   margin: var(--spacing-sm) 0;
@@ -296,13 +272,11 @@ input[type="number"]::-webkit-inner-spin-button {
   flex-direction: column;
 }
 
-/* Button group styles */
 .buttons-group {
   display: flex;
   gap: var(--spacing-lg);
 }
 
-/* Preset list styles */
 .clock-presets-list {
   list-style: none;
   margin: var(--spacing-lg) 0;
@@ -367,7 +341,6 @@ input[type="number"]::-webkit-inner-spin-button {
   color: var(--color-text-danger);
 }
 
-/* Timer styles */
 .timer-circle {
   position: relative;
   width: 320px;
@@ -500,19 +473,16 @@ input[type="number"]::-webkit-inner-spin-button {
   }
 }
 
-/* Usage tab styles */
 .usage-container {
   text-align: left;
   padding: var(--spacing-md);
   max-height: 405px;
   overflow-y: auto;
 
-  /* Custom scrollbar styling */
   scrollbar-width: thin;
   scrollbar-color: var(--color-bg-tertiary) var(--color-bg-secondary);
 }
 
-/* Webkit scrollbar styling (Chrome, Safari, newer Edge) */
 .usage-container::-webkit-scrollbar {
   width: 8px;
 }
@@ -563,7 +533,6 @@ input[type="number"]::-webkit-inner-spin-button {
   color: var(--color-text-light);
 }
 
-/* Reduced motion: state changes still apply, only without animating */
 @media (prefers-reduced-motion: reduce) {
   :root {
     --transition-default: none;
