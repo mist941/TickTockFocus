@@ -1,8 +1,8 @@
-# TickTockFocus - Advanced Timer Extension
+# TickTackFocus - Advanced Timer Extension
 
-TickTockFocus is a powerful Chrome extension that helps you manage your time with customizable timer presets. Perfect for productivity techniques like Pomodoro, time-boxing, or any workflow that requires structured time management.
+TickTackFocus is a powerful Chrome extension that helps you manage your time with customizable timer presets. Perfect for productivity techniques like Pomodoro, time-boxing, or any workflow that requires structured time management.
 
-![TickTockFocus](icons/icon512.png)
+![TickTackFocus](icons/icon512.png)
 
 ## Features
 
@@ -58,11 +58,11 @@ TickTockFocus is a powerful Chrome extension that helps you manage your time wit
 
 1. Download the extension from the Chrome Web Store
 2. Click "Add to Chrome"
-3. The TickTockFocus icon will appear in your browser toolbar
+3. The TickTackFocus icon will appear in your browser toolbar
 
 ## Privacy
 
-TickTockFocus respects your privacy:
+TickTackFocus respects your privacy:
 - Presets and settings are saved with Chrome's sync storage, so they follow your Google account when Chrome Sync is on; the running timer's state stays in your browser
 - No data is sent to the developer or to any server besides Chrome Sync
 - No tracking or analytics
