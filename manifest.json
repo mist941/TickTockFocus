@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "TickTockFocus - Multi-Step Timer & Routines",
+  "name": "TickTockFocus - Multi-Step Focus Timer",
   "version": "1.1.0",
   "minimum_chrome_version": "120",
-  "description": "Multi-step timer for study, work and workouts: Pomodoro, 52/17 or your own routine. Alerts at every step. No site access.",
+  "description": "Multi-step focus timer: Pomodoro, 52/17 or your own routine. A notification at every step. No site access, no account required.",
   "action": {
     "default_title": "TickTockFocus",
     "default_popup": "popup/popup.html",
