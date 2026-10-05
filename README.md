@@ -1,80 +1,33 @@
-# TickTockFocus - Advanced Timer Extension
+# TickTockFocus
 
-TickTockFocus is a powerful Chrome extension that helps you manage your time with customizable timer presets. Perfect for productivity techniques like Pomodoro, time-boxing, or any workflow that requires structured time management.
+<img src="icons/icon128.png" alt="" width="64" align="right">
 
-![TickTockFocus](icons/icon512.png)
+A multi-step focus timer for Chrome: Pomodoro, 52/17 or your own routine. A preset is a sequence of steps, such as 25 minutes of work and 5 of rest, that run back to back, with a notification at the end of every step. No site access, no account required.
+
+[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/nealkefeifpkmkbfcfbkffdgnlohjbae)
 
 ## Features
 
-### 🕒 Multi-Stage Timer Presets
-- Create custom timer presets with multiple stages
-- Each preset can contain multiple clock segments that run in sequence
-- Visual progress indicators show your position within the timer sequence
+- Presets of up to 50 steps of 30 seconds or more; reorder steps by dragging or with the ↑/↓ buttons
+- A progress ring with labelled markers where steps end
+- Keeps running with the popup closed. If the timer ended while Chrome was closed or the computer was asleep, one notification tells you when it finished
+- Presets and settings sync across your computers when Chrome Sync is on
+- 12- or 24-hour clock; usable with just the keyboard
 
-### 📊 Visual Timer Display
-- Clean, intuitive circular progress indicator
-- Visual markers for each stage of your timer sequence
-- Real-time countdown display
+## Usage
 
-### 🔔 Notifications
-- Receive notifications when the entire timer completes
-- Get milestone notifications when each individual clock segment finishes
-- Stay on track without constantly checking the timer
+1. On the **Presets** tab, click **Create preset**, enter a name, add steps (hours, minutes, seconds, then **Add**) and click **Create**.
+2. On the **Timer** tab, pick the preset and click **Start**. **Stop** ends the run early.
+3. Click a saved preset to select it on the Timer tab; **×** deletes it.
 
-### ⚙️ Customization Options
-- Create unlimited timer presets for different activities
-- Easily reorder clock segments with drag-and-drop or the ↑ and ↓ buttons
-- Toggle between 12-hour and 24-hour time formats
-- Presets and settings sync across your computers through your Google account when Chrome Sync is on
+## Development
 
-### 💾 Persistent Timer State
-- Timers continue running even if you close the popup
-- Timer state is preserved between browser sessions
-- Easily resume your workflow where you left off
-
-## How to Use
-
-### Creating Timer Presets
-1. Click the "Presets" tab
-2. Click "Create preset"
-3. Enter a name for your preset
-4. Add clock segments (at least 30 seconds each) by setting hours, minutes, seconds and clicking "Add"
-5. Rearrange segments by dragging them or with the ↑ and ↓ buttons
-6. Click "Create" to save your preset
-
-### Running a Timer
-1. Click the "Timer" tab
-2. Select a preset from the dropdown menu
-3. Click "Start" to begin the timer
-4. The timer will run through all clock segments in sequence
-5. You'll receive notifications at each milestone and when the timer completes
-
-### Managing Presets
-- All your saved presets appear in the "Presets" tab
-- Click a preset to select it on the Timer tab
-- Use the "×" button to delete unwanted presets
-
-## Installation
-
-1. Download the extension from the Chrome Web Store
-2. Click "Add to Chrome"
-3. The TickTockFocus icon will appear in your browser toolbar
+There is no build step and there are no dependencies: the repository root is the unpacked extension. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and select the repository folder. Chrome 120 or later is required.
 
 ## Privacy
 
-TickTockFocus respects your privacy:
-- Presets and settings are saved with Chrome's sync storage, so they follow your Google account when Chrome Sync is on; the running timer's state stays in your browser
-- No data is sent to the developer or to any server besides Chrome Sync
-- No tracking or analytics
+The extension uses only the `storage`, `alarms` and `notifications` permissions. Presets and settings live in Chrome's sync storage, so they follow your Google account when Chrome Sync is on; the running timer stays in your browser. There are no servers, tracking or analytics. See the [privacy policy](privacy-policy.md).
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the LICENSE file for details.
-
-## Support
-
-If you encounter any issues or have suggestions for improvements, please open an issue on our GitHub repository.
-
----
-
-Developed with ❤️ for productive time management
+[Apache 2.0](LICENSE). Report bugs and ideas in [GitHub issues](https://github.com/mist941/TickTockFocus/issues).
