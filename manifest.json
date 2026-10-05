@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "TickTockFocus - Multi-Step Focus Timer",
+  "name": "TickTockFocus - Multi-Step Timer & Routines",
   "version": "1.1.0",
   "minimum_chrome_version": "120",
   "description": "Multi-step focus timer: Pomodoro, 52/17 or your own routine. A notification at every step. No site access, no account required.",
