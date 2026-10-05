@@ -26,7 +26,7 @@ There is no build step and there are no dependencies: the repository root is the
 
 ## Privacy
 
-The extension uses only the `storage`, `alarms` and `notifications` permissions. Presets and settings live in Chrome's sync storage, so they follow your Google account when Chrome Sync is on; the running timer stays in your browser. There are no servers, tracking or analytics. See the [privacy policy](privacy-policy.md).
+The extension uses only the `storage`, `alarms` and `notifications` permissions. Presets and settings live in Chrome's sync storage, so they follow your Google account when Chrome Sync is on; the running timer stays in your browser. There are no servers, tracking or analytics. See the [privacy policy](https://ticktockfocus.com/privacy.html).
 
 ## License
 
