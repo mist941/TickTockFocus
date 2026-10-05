@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "TickTockFocus - Advanced Timer",
+  "name": "TickTockFocus - Multi-Step Timer & Routines",
   "version": "1.1.0",
   "minimum_chrome_version": "120",
-  "description": "Powerful time management tool with customizable multi-stage timer presets. Perfect for Pomodoro technique and structured workflows.",
+  "description": "Multi-step timer for study, work and workouts: Pomodoro, 52/17 or your own routine. Alerts at every step. No site access.",
   "action": {
+    "default_title": "TickTockFocus",
     "default_popup": "popup/popup.html",
-    "default_icon": {
-      "16": "icons/icon16.png",
+    "default_icon": { 
+      "16": "icons/icon16.png", 
       "32": "icons/icon32.png"
     }
   },
